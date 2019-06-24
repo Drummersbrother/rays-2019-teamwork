@@ -4,9 +4,11 @@
 \newif\ifTiKZ
 
 %%%%% USER CONFIGURATION %%%%%
-\newcommand{\userName}{Jose Javier Gonzalez}
-\newcommand{\userId}{JJ}
-\newcommand{\institution}{University of Michigan}
+\newcommand{\userName}{Hugo Berg}
+\newcommand{\userId}{HB}
+\newcommand{\institution}{Rays -- For Excellence -- 2019}
+% Added by Hugo Berg
+\usepackage{ifthen}
 % Toggles, set to false if not needed since it will speed up the compilation
 \LISTINGStrue   % LISTINGS toggle
 \ALGORITHMStrue % ALGORITHMS toggle
@@ -14,7 +16,7 @@
 
 \input{researchdiary_config}
 \begin{document}
-\title{CinC-2016 Logbook}
+\title{Rays 2019 -- Logbook}
 \univlogo
 {\Huge Project Title}\\[5mm]
 
@@ -29,14 +31,7 @@
 In this section one should introduce what the research is about, in a high level so you can do a simple explanation of the topic and the research challenges that you are facing.
 \end{tip}
 
-During the cardiac cycle, the heart firstly generates the electrical activity and then the electrical activity causes atrial and ventricular contractions. This in turn forces blood between the chambers of the heart and around the body. The opening and closure of the heart valves is associated with accelerations-decelerations of blood, giving rise to vibrations of the entire cardiac structure (the heart sounds and murmurs). These vibrations are audible at the chest wall, and listening for specific heart sounds can give an indication of the health of the heart. The phonocardiogram (PCG) is the graphical representation of a heart sound recording. Figure \ref{fig:PCG_ECG} illustrates a short section of a PCG recording.
-
-\begin{figure}[h]
-    \includegraphics[width=0.6\textwidth]{Images/PCG_ECG}
-    \centering
-    \caption{A PCG (center tracing), with simultaneously recorded ECG (lower tracing) and the four states of the PCG recording; S1, Systole, S2 and Diastole.}
-    \label{fig:PCG_ECG}
-\end{figure}
+During the cardiac cycle, the heart firstly generates the electrical activity and then the electrical activity causes atrial and ventricular contractions. This in turn forces blood between the chambers of the heart and around the body. The opening and closure of the heart valves is associated with accelerations-decelerations of blood, giving rise to vibrations of the entire cardiac structure (the heart sounds and murmurs). These vibrations are audible at the chest wall, and listening for specific heart sounds can give an indication of the health of the heart. The phonocardiogram (PCG) is the graphical representation of a heart sound recording. Figure illustrates a short section of a PCG recording.
 
 The objective of the challenge is to create a model is able to correctly discriminate between the two classes given just the PCG recordings. Challenges include:
 
@@ -194,8 +189,8 @@ def DTW_distance(s1, s2):
     for i in range(len(s1)):
         for j in range(len(s2)):
             dist= (s1[i]-s2[j])**2
-            <|DTW[(i, j)] = dist + min(DTW[(i-1, j)],DTW[(i, j-1)], DTW[(i-1, j-1)])|>
-
+            
+            
     return sqrt(DTW[len(s1)-1, len(s2)-1])
 \end{lstlisting}
 
@@ -267,13 +262,6 @@ TiKZtrue} in the preamble
 However, sometimes you will need more complicated diagrams (or maybe you do not like TiKZ, in that case I recommend a vector drawing tool such as Inkscape which allows \LaTeX \,embedding)
 \end{tip}
 
-\begin{figure}[h]
-    \includegraphics[width=0.9\textwidth]{Images/LSTM}
-    \centering
-    \caption{Gate Recurrent Unit in a Long Short Term Memory Neural Netwok (GRU-LSTM). \\ \emph{Credit to \url{https://colah.github.io/posts/2015-08-Understanding-LSTMs/}}}
-    \label{fig:LSTM}
-\end{figure}
-
 % subsection diagrams (end)
 
 % section methods (end)
@@ -288,36 +276,7 @@ However, sometimes you will need more complicated diagrams (or maybe you do not 
 In general the best way to visualize your results will be some figures, I recommend Python's matplotlib for generating them or R's ggplot2.
 \end{tip}
 
-\begin{figure}[htp]
-    \centering
-    \begin{subfigure}{0.48\textwidth}
-        \centering
-        \includegraphics[width=\textwidth]{Images/accuracy_128.png}
-        \caption{Average accuracies for 128-bit key}
-    \end{subfigure}
-    \hspace{.35cm}
-    \begin{subfigure}{0.48\textwidth}
-        \centering
-        \includegraphics[width=\textwidth]{Images/accuracy_192.png}
-        \caption{Average accuracies for 192-bit key}
-    \end{subfigure}%
 
-    \vspace{1cm}
-    \begin{subfigure}{0.48\textwidth}
-        \centering
-        \includegraphics[width=\textwidth]{Images/accuracy_256.png}
-        \caption{Average accuracies for 256-bit key}
-    \end{subfigure}
-    \hspace{.35cm}
-    \begin{subfigure}{0.48\textwidth}
-        \centering
-        \includegraphics[width=\textwidth]{Images/times.png}
-        \caption{Average Runtimes for various mask sizes}
-    \end{subfigure}
-    \vspace{.25cm}
-    \caption{Results of simulation of the LMS algorithm with correction}
-    \label{fig:plots}
-\end{figure}
 
 % subsection figures (end)
 
@@ -396,7 +355,6 @@ It is a good idea to record sources that explain concepts or provide tools so th
 \begin{tip}
 Do not forget to cite the papers that you are using in your research, this way the \textbf{Previous Work} part in your paper will be infinitely easier to write when the time comes.
 \end{tip}
-\nocite{*}
 \bibliographystyle{alpha}
 \bibliography{mybib}
 \clearpage
