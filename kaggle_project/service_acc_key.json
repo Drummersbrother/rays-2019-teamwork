@@ -1,0 +1,12 @@
+{
+  "type": "service_account",
+  "project_id": "kaggle-siim-healthcare-rays",
+  "private_key_id": "5bc305a6fff2145a145f3fdd427bd6ae6acd7b88",
+  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQDAlz1rIt6T5EwR\nT4ur7tEF5sQPrrW049WUw3bqU62in/vKEuoaZJpM2T8T8BB3seuMOfQwh85UU1Ky\n9v7IiqpXJcY3XxZX28MF3pfMvmfLmhDrUFC4sW9DfYZYdqZPpviFqA7Ex69ZB1gU\n5RBum0sRc5gJqFu87QFuNOVbu/pJ53DNMxtjBbV0vWf8qX+HE2+glkG0uEu49bii\noMJnbYrxwp53eUj2H0ZU3JPDikaYAhYO9maXyGsH8XWYOCatBD5NpBGZnbyjUqd+\nwSL3BVwoN7Oe+NzhDLyrny9Niuc0jfHPr9mN+7JtLS0SAXk35R68eCEsXBBzfmSZ\nooBreaiPAgMBAAECggEAXKNjI7muHq1d+aWtpZJGcPRDstdzCAPfpKMw/B4sE2Gp\nF9ZpTTC/F+AX+1sqUKkAiH8H+qAYm29JBFTS0VwB+9Fruw6+DJzk/lnH4vBjtQfy\nw33qliyjPG+Qw9Suwvmp6YChOf5jVgu2TrawZMPGJCraIysclY/bdEt1V97f0dPv\nc/r2CvWnow3kc8+J8gLDahRzgcmjkJTzdX2NK82LPfRJBv9pownNFwBhiJgo5OMq\nBswtiAsOTzr8mQVCvMuopH3UGajaBbTF2OO5lFg9gCwsxrlQylsZKxYHvCpeqXC+\ngFM6lPi49jFVWAecOZkDpOa+bmWYgCPw02PByjDAAQKBgQDyvxfFQfO0Tv+tS8TF\nHYNPzMd7FF4CdHKlos0JeR1ifrsOLiu2SUwveehS3fc/Y3Lbt24wpCa6Q12wbO0S\nIb83r1D0kw61blJ49jonc0Xg7kiASAka9MhWk9uyzb2tX9LlPH6D8a2UpthOOoA+\nAzGeBnFZnet9qcMgEbV2jlfIAQKBgQDLGxzpZHFi8tPatKENKrwYUSECq2uOaAMO\nwbYC2gWE9yzMMO/i43+S7z6BdyZ1DhEBziSMtmVh8fIaTrekGl8AL4EjIvlIgoxA\nvi0+be/dxuXWclXbKj76XF/nBrhAVEO01EZkdClctBb+Z4cLL5dcvJGV6a9OsGxs\nVAupHPDwjwKBgQCqTt/CiY8OBg7j6rDXCunB5w5dj+CVIFX/V8U6zDqNjBR40nPg\npHRLKuCQoyKA2qkO9hbdEY4KSJFG4mVBv2OFEf9eWH6NVCWQsFAEtZ9lPEipl+Cr\nhOm5tGsDe82EAiLYqiSpNbpu/M/tsqWe3GbHVAXati0uMRixOztxPlTgAQKBgHcN\nUnogDTKR4cqt3EVKimy6iV32OxqDL1+j/ltXjqqs9A5QlRxqe6oWII5k2B7++ssT\nGWt9spmh52ayQ4SmjI8gSVLeOj7dfvaoQv74FATshGaaKGdKMRYxtWlHEBNtES7a\nytQxHtmfGmdPKeJNqCyMv82e58p5MWSiMx+SvkxTAoGBANiMocz89YZOS8S3EATq\niOPfVsKDCY2TC6s2e4qiBeM/SpdG6SA/Lu9akoK/9hJ1uwHNRsJMPaEG3jDuUq0w\n6TjoNZa+oLNh9eqo4UqLPcjthjRl+0lR35fHUTjkvnzjQiwbIl1iHd1NK41rSw4Y\nkhC7xxlPQtH4c5pRVnYQlH5W\n-----END PRIVATE KEY-----\n",
+  "client_email": "data-downloader@kaggle-siim-healthcare-rays.iam.gserviceaccount.com",
+  "client_id": "104970644195327373145",
+  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+  "token_uri": "https://oauth2.googleapis.com/token",
+  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/data-downloader%40kaggle-siim-healthcare-rays.iam.gserviceaccount.com"
+}
