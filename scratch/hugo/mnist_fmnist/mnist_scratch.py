@@ -1,8 +1,8 @@
 import tensorflow as tf
 import numpy as np
-import matplotlib as mpl
-from matplotlib import pyplot as plt
 from tensorflow import keras
+from matplotlib import pyplot as plt
+import matplotlib as mpl
 
 
 def show_pic(pic):
@@ -74,7 +74,7 @@ if __name__ == "__main__":
     model = get_model(True, model_filename)
 
     # We choose the "functional" hyperparameters
-    model.compile(optimizer=keras.optimizers.SGD(lr=lr), loss="mse")
+    model.compile(optimizer=keras.optimizers.Adam(lr=lr), loss="mse")
 
     # We only train the network on training data
     model_history = model.fit(train_images, train_labels, epochs=n_epochs, use_multiprocessing=True)

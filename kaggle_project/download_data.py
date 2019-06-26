@@ -30,6 +30,8 @@ def download_instance(dicom_web_url, dicom_store_id, study_uid, series_uid,
     if not os.path.exists(filename):
         os.makedirs(os.path.dirname(filename))
     with open(filename, 'wb') as f:
+        if response.status_code != 200:
+            print("Error!:", response.status_code, "file was", filename)
         f.write(response.content)
 
 
@@ -65,7 +67,7 @@ def download_all_instances(dicom_store_id, credentials):
             try:
                 future.result()
                 processed_count += 1
-                if not processed_count % 10 or processed_count == len(content):
+                if not processed_count % 100 or processed_count == len(content):
                     print('Processed instance %d out of %d' %
                           (processed_count, len(content)))
             except Exception as e:
@@ -74,7 +76,8 @@ def download_all_instances(dicom_store_id, credentials):
 
 
 def main(argv=None):
-    credentials, _ = google.auth.default()
+    credentials, _ = google.auth.default()#_default._load_credentials_from_file("service_acc_key.json")
+
     print('Downloading all instances in %s DICOM store' % TRAIN_DICOM_STORE_ID)
     download_all_instances(TRAIN_DICOM_STORE_ID, credentials)
     print('Downloading all instances in %s DICOM store' % TEST_DICOM_STORE_ID)
