@@ -239,8 +239,12 @@ if __name__ == "__main__":
     train_data_pref = data_dir + "dicom-images-train"
     test_data_pref = data_dir + "dicom-images-test"
 
-    recheck_valid_filepaths = False
-    if recheck_valid_filepaths:
+    try:
+        with open(data_dir + "valid_train_filepaths", mode="r") as f:
+            valid_train_filepaths = f.read().split("\n")
+        print("Loaded data from old list of valid data files")
+    except FileNotFoundError:
+        print("Re-checking which data files are valid")
         rle_data = pd.read_csv(os.getcwd() + "/data" + "/train-rle.csv", header=None, index_col=0)
         valid_train_filepaths = [file_path for file_path in
                                  glob(train_data_pref + "/*/*/*.dcm", recursive=True)
@@ -255,9 +259,6 @@ if __name__ == "__main__":
             f.write("\n".join(valid_train_filepaths))
         with open(data_dir + "valid_test_filepaths", mode="w") as f:
             f.write("\n".join(valid_test_filepaths))
-    else:
-        with open(data_dir + "valid_train_filepaths", mode="r") as f:
-            valid_train_filepaths = f.read().split("\n")
 
     train_generator = DataLoader(valid_train_filepaths, batch_size=1)
 
