@@ -3,13 +3,13 @@
 import tensorflow as tf
 from tensorflow import keras
 import numpy as np
-import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt 
 
 def fun(x):
     return 0.8*np.tanh(2*x+0.5)+0.1
 
 # Data
-num_points = 100
+num_points = 100000
 #x = np.concatenate((np.linspace(0.01, 0.5, num_points), np.linspace(0.5, 1, 5)))
 x = np.linspace(0.0, 1, num_points)
 y = fun(x)
