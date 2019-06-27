@@ -47,10 +47,10 @@ class DataLoader(keras.utils.Sequence):
         return X, Y
 
     def load_filepath(self, filepath):
-        train_rle_data = pd.read_csv(os.getcwd() + "/data" + "/train-rle.csv", header=None, index_col=0)
+        train_rle_data = pd.read_csv(os.path.join(os.getcwd(), "data", "train-rle.csv"), header=None, index_col=0)
         dataset = pydicom.dcmread(filepath, force=True)
         X = np.expand_dims(dataset.pixel_array, axis=2)
-        y_raw = str(train_rle_data.loc[filepath.split('/')[-1][:-4], 1])
+        y_raw = str(train_rle_data.loc[filepath.split(os.sep)[-1][:-4], 1])
 
         if len(y_raw.split()) != 1:
             Y = np.expand_dims(rle2mask(y_raw, *self.dim).T, axis=2)
@@ -88,7 +88,7 @@ def check_valid_datafile(filepath, rle_df, needs_label=True):
 
     if needs_label:
         try:
-            str(rle_df.loc[filepath.split('/')[-1][:-4], 1])
+            str(rle_df.loc[filepath.split(os.sep)[-1][:-4], 1])
         except:
             print(f"Skipping loading of {filepath}, file doesn't seem to exist")
             return False
@@ -245,12 +245,12 @@ if __name__ == "__main__":
         print("Loaded data from old list of valid data files")
     except FileNotFoundError:
         print("Re-checking which data files are valid")
-        rle_data = pd.read_csv(os.getcwd() + "/data" + "/train-rle.csv", header=None, index_col=0)
+        rle_data = pd.read_csv(os.path.join(os.getcwd(), "data", "train-rle.csv"), header=None, index_col=0)
         valid_train_filepaths = [file_path for file_path in
-                                 glob(train_data_pref + "/*/*/*.dcm", recursive=True)
+                                 glob(os.path.join(train_data_pref, "*","*","*.dcm"), recursive=True)
                                  if check_valid_datafile(file_path, rle_data)]
         valid_test_filepaths = [file_path for file_path in
-                                glob(test_data_pref + "/*/*/*.dcm", recursive=True)
+                                glob(os.path.join(test_data_pref, "*","*","*.dcm"), recursive=True)
                                 if check_valid_datafile(file_path, rle_data, needs_label=False)]
 
         print(len(valid_test_filepaths), len(valid_train_filepaths))

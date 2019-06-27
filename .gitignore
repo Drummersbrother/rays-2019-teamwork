@@ -369,3 +369,5 @@ dmypy.json
 .pyre/
 
 kaggle_project/data
+kaggle_project/data_ny
+kaggle_project/zips
