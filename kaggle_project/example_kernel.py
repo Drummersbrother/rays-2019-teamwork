@@ -1,5 +1,6 @@
 import tensorflow as tf
 import numpy as np
+from PIL import Image
 import pandas as pd
 from tensorflow import keras
 from matplotlib import pyplot as plt
@@ -8,7 +9,7 @@ from skimage.color import label2rgb
 
 import os
 from glob import glob
-import pydicom
+#import pydicom
 from matplotlib import cm
 
 import tensorflow.keras.layers as klayer
@@ -47,12 +48,10 @@ class DataLoader(keras.utils.Sequence):
         return X, Y
 
     def load_filepath(self, filepath):
-        train_rle_data = pd.read_csv(os.path.join(os.getcwd(), "data", "train-rle.csv"), header=None, index_col=0)
-        dataset = pydicom.dcmread(filepath, force=True)
-
-        X = np.expand_dims(dataset.pixel_array, axis=2)
-        y_raw = str(train_rle_data.loc[filepath.split(os.sep)[-1][:-4], 1])
-
+        train_rle_data = pd.read_csv(os.getcwd() + "/data" + "/train-rle.csv", header=None, index_col=0)
+        X = np.array(Image.open(filepath))
+        X = np.expand_dims(X, axis=2)
+        y_raw = str(train_rle_data.loc[filepath.split('/')[-1][:-4], 1])
         if len(y_raw.split()) != 1:
             Y = np.expand_dims(rle2mask(y_raw, *self.dim).T, axis=2)
         else:
@@ -80,24 +79,17 @@ class DataLoader(keras.utils.Sequence):
 def check_valid_datafile(filepath, rle_df, needs_label=True):
     # We try to load each file in order to find which ones are invalid
     try:
-        dataset = pydicom.dcmread(filepath, force=True)
+        xray_image = Image.open(filepath)
     except Exception as e:
         print(e)
-        print(f"Skipping loading of {filepath}, file didn't load as a DICOM correctly")
-        return False
-
-    try:
-        l = dataset.pixel_array
-    except Exception as e:
-        print(e)
-        print(f"Skipping loading of {filepath}, file was probably a Google error message")
+        print(f"Skipping loading of {filepath}, file didn't load correctly")
         return False
 
     if needs_label:
         try:
-            str(rle_df.loc[filepath.split(os.sep)[-1][:-4], 1])
+            str(rle_df.loc[filepath.split('/')[-1][:-4], 1])
         except:
-            print(f"Skipping loading of {filepath}, file doesn't seem to exist")
+            print(f"Skipping loading of {filepath}, file doesn't have label when it should")
             return False
     return True
 
@@ -305,8 +297,8 @@ def unet(pretrained_weights=None, input_size=(1024, 1024, 1), down_sampling=4):
 
 
 if __name__ == "__main__":
-    train_data_pref = data_dir + "dicom-images-train"
-    test_data_pref = data_dir + "dicom-images-test"
+    train_data_pref = data_dir + "train_png"
+    test_data_pref = data_dir + "test_png"
 
     try:
         with open(data_dir + "valid_train_filepaths", mode="r") as f:
@@ -316,10 +308,10 @@ if __name__ == "__main__":
         print("Re-checking which data files are valid")
         rle_data = pd.read_csv(os.path.join(os.getcwd(), "data", "train-rle.csv"), header=None, index_col=0)
         valid_train_filepaths = [file_path for file_path in
-                                 glob(os.path.join(train_data_pref, "*","*","*.dcm"), recursive=True)
+                                 glob(os.path.join(train_data_pref, "*.png"), recursive=True)
                                  if check_valid_datafile(file_path, rle_data)]
         valid_test_filepaths = [file_path for file_path in
-                                glob(os.path.join(test_data_pref, "*","*","*.dcm"), recursive=True)
+                                glob(os.path.join(test_data_pref, "*.png"), recursive=True)
                                 if check_valid_datafile(file_path, rle_data, needs_label=False)]
 
         print(len(valid_test_filepaths), len(valid_train_filepaths))
