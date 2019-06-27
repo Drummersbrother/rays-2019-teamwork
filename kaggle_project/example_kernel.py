@@ -11,13 +11,9 @@ from glob import glob
 import pydicom
 from matplotlib import cm
 
-from keras.preprocessing.image import ImageDataGenerator, array_to_img, img_to_array, load_img
+import tensorflow.keras.layers as klayer
 
-import sys
-# sys.path.insert(0, '../input')
-# This is one of the scripts included in the kaggle competition data
 import numpy as np
-
 
 data_dir = os.getcwd() + os.sep + "data" + os.sep
 
@@ -40,8 +36,8 @@ class DataLoader(keras.utils.Sequence):
     def __data_generation(self, filepaths):
         """Generates data containing batch_size samples"""  # X : (n_samples, *dim, n_channels)
         # Initialization
-        X = np.empty((self.batch_size, *self.dim), dtype=np.uint8)
-        Y = np.empty((self.batch_size, *self.dim), dtype=np.bool)
+        X = np.empty((self.batch_size, *self.dim, 1), dtype=np.uint8)
+        Y = np.empty((self.batch_size, *self.dim, 1), dtype=np.bool)
 
         # Generate data
         for i, filepath in enumerate(filepaths):
@@ -52,15 +48,15 @@ class DataLoader(keras.utils.Sequence):
 
     def load_filepath(self, filepath):
         train_rle_data = pd.read_csv(os.getcwd() + "/data" + "/train-rle.csv", header=None, index_col=0)
-        dataset = pydicom.dcmread(file_path)
+        dataset = pydicom.dcmread(filepath, force=True)
         X = np.expand_dims(dataset.pixel_array, axis=2)
-        y_raw = str(train_rle_data.loc[file_path.split('/')[-1][:-4], 1])
+        y_raw = str(train_rle_data.loc[filepath.split('/')[-1][:-4], 1])
 
         if len(y_raw.split()) != 1:
             Y = np.expand_dims(rle2mask(y_raw, *self.dim).T, axis=2)
         else:
             Y = np.zeros((*self.dim, 1))
-
+        print(X.shape, Y.shape)
         return X, Y
 
     def __len__(self):
@@ -70,7 +66,7 @@ class DataLoader(keras.utils.Sequence):
     def __getitem__(self, index):
         """Generate one batch of data"""
         # Generate indexes of the batch
-        indexes = self.indexes[index * self.batch_size:(index + 1) * self.batch_size]
+        indexes = self.indices[index * self.batch_size:(index + 1) * self.batch_size]
 
         # Find list of IDs
         batch_shuffled_files = [self.filepaths[k] for k in indexes]
@@ -181,16 +177,90 @@ def plot_pixel_array(dataset, figsize=(10, 10)):
     plt.show()
 
 
+def unet(pretrained_weights=None, input_size=(1024, 1024, 1)):
+    inputs = klayer.Input(input_size)
+    conv1 = klayer.Conv2D(64, 3, activation='relu', padding='same', kernel_initializer='he_normal')(inputs)
+    conv1 = klayer.Conv2D(64, 3, activation='relu', padding='same', kernel_initializer='he_normal')(conv1)
+    pool1 = klayer.MaxPooling2D(pool_size=(2, 2))(conv1)
+    conv2 = klayer.Conv2D(128, 3, activation='relu', padding='same', kernel_initializer='he_normal')(pool1)
+    conv2 = klayer.Conv2D(128, 3, activation='relu', padding='same', kernel_initializer='he_normal')(conv2)
+    pool2 = klayer.MaxPooling2D(pool_size=(2, 2))(conv2)
+    conv3 = klayer.Conv2D(256, 3, activation='relu', padding='same', kernel_initializer='he_normal')(pool2)
+    conv3 = klayer.Conv2D(256, 3, activation='relu', padding='same', kernel_initializer='he_normal')(conv3)
+    pool3 = klayer.MaxPooling2D(pool_size=(2, 2))(conv3)
+    conv4 = klayer.Conv2D(512, 3, activation='relu', padding='same', kernel_initializer='he_normal')(pool3)
+    conv4 = klayer.Conv2D(512, 3, activation='relu', padding='same', kernel_initializer='he_normal')(conv4)
+    drop4 = klayer.Dropout(0.5)(conv4)
+    pool4 = klayer.MaxPooling2D(pool_size=(2, 2))(drop4)
+
+    conv5 = klayer.Conv2D(1024, 3, activation='relu', padding='same', kernel_initializer='he_normal')(pool4)
+    conv5 = klayer.Conv2D(1024, 3, activation='relu', padding='same', kernel_initializer='he_normal')(conv5)
+    drop5 = klayer.Dropout(0.5)(conv5)
+
+    up6 = klayer.Conv2D(512, 2, activation='relu', padding='same', kernel_initializer='he_normal')(
+        klayer.UpSampling2D(size=(2, 2))(drop5))
+    merge6 = klayer.concatenate([drop4, up6], axis=3)
+    conv6 = klayer.Conv2D(512, 3, activation='relu', padding='same', kernel_initializer='he_normal')(merge6)
+    conv6 = klayer.Conv2D(512, 3, activation='relu', padding='same', kernel_initializer='he_normal')(conv6)
+
+    up7 = klayer.Conv2D(256, 2, activation='relu', padding='same', kernel_initializer='he_normal')(
+        klayer.UpSampling2D(size=(2, 2))(conv6))
+    merge7 = klayer.concatenate([conv3, up7], axis=3)
+    conv7 = klayer.Conv2D(256, 3, activation='relu', padding='same', kernel_initializer='he_normal')(merge7)
+    conv7 = klayer.Conv2D(256, 3, activation='relu', padding='same', kernel_initializer='he_normal')(conv7)
+
+    up8 = klayer.Conv2D(128, 2, activation='relu', padding='same', kernel_initializer='he_normal')(
+        klayer.UpSampling2D(size=(2, 2))(conv7))
+    merge8 = klayer.concatenate([conv2, up8], axis=3)
+    conv8 = klayer.Conv2D(128, 3, activation='relu', padding='same', kernel_initializer='he_normal')(merge8)
+    conv8 = klayer.Conv2D(128, 3, activation='relu', padding='same', kernel_initializer='he_normal')(conv8)
+
+    up9 = klayer.Conv2D(64, 2, activation='relu', padding='same', kernel_initializer='he_normal')(
+        klayer.UpSampling2D(size=(2, 2))(conv8))
+    merge9 = klayer.concatenate([conv1, up9], axis=3)
+    conv9 = klayer.Conv2D(64, 3, activation='relu', padding='same', kernel_initializer='he_normal')(merge9)
+    conv9 = klayer.Conv2D(64, 3, activation='relu', padding='same', kernel_initializer='he_normal')(conv9)
+    conv9 = klayer.Conv2D(2, 3, activation='relu', padding='same', kernel_initializer='he_normal')(conv9)
+    conv10 = klayer.Conv2D(1, 1, activation='sigmoid')(conv9)
+
+    model = tf.keras.Model(inputs=inputs, outputs=conv10)
+
+    model.compile(optimizer=keras.optimizers.Adam(lr=1e-4), loss='binary_crossentropy', metrics=['accuracy'])
+
+    # model.summary()
+
+    if (pretrained_weights):
+        model.load_weights(pretrained_weights)
+
+    return model
+
+
 if __name__ == "__main__":
     train_data_pref = data_dir + "dicom-images-train"
     test_data_pref = data_dir + "dicom-images-test"
 
-    rle_data = pd.read_csv(os.getcwd() + "/data" + "/train-rle.csv", header=None, index_col=0)
-    valid_train_filepaths = [file_path for file_path in
-                             glob(train_data_pref + "/*/*/*.dcm", recursive=True)
-                             if check_valid_datafile(file_path, rle_data)]
-    valid_test_filepaths = [file_path for file_path in
-                             glob(test_data_pref + "/*/*/*.dcm", recursive=True)
-                             if check_valid_datafile(file_path, rle_data, needs_label=False)]
+    recheck_valid_filepaths = False
+    if recheck_valid_filepaths:
+        rle_data = pd.read_csv(os.getcwd() + "/data" + "/train-rle.csv", header=None, index_col=0)
+        valid_train_filepaths = [file_path for file_path in
+                                 glob(train_data_pref + "/*/*/*.dcm", recursive=True)
+                                 if check_valid_datafile(file_path, rle_data)]
+        valid_test_filepaths = [file_path for file_path in
+                                glob(test_data_pref + "/*/*/*.dcm", recursive=True)
+                                if check_valid_datafile(file_path, rle_data, needs_label=False)]
 
-    print(len(valid_test_filepaths), len(valid_train_filepaths))
+        print(len(valid_test_filepaths), len(valid_train_filepaths))
+
+        with open(data_dir + "valid_train_filepaths", mode="w") as f:
+            f.write("\n".join(valid_train_filepaths))
+        with open(data_dir + "valid_test_filepaths", mode="w") as f:
+            f.write("\n".join(valid_test_filepaths))
+    else:
+        with open(data_dir + "valid_train_filepaths", mode="r") as f:
+            valid_train_filepaths = f.read().split("\n")
+
+    train_generator = DataLoader(valid_train_filepaths, batch_size=1)
+
+    unet_model = unet()
+
+    unet_model.fit_generator(train_generator, epochs=1)
