@@ -48,7 +48,7 @@ class DataLoader(keras.utils.Sequence):
         return X, Y
 
     def load_filepath(self, filepath):
-        train_rle_data = pd.read_csv(os.getcwd() + "/data" + "/train-rle.csv", header=None, index_col=0)
+        train_rle_data = pd.read_csv(os.path.join(os.getcwd(), "data", "train-rle.csv"), header=None, index_col=0)
         X = np.array(Image.open(filepath))
         X = np.expand_dims(X, axis=2)
         y_raw = str(train_rle_data.loc[filepath.split(os.sep)[-1][:-4], 1])
