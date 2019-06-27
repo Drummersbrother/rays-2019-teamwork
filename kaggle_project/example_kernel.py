@@ -57,7 +57,6 @@ class DataLoader(keras.utils.Sequence):
             Y = np.expand_dims(rle2mask(y_raw, *self.dim).T, axis=2)
         else:
             Y = np.zeros((*self.dim, 1))
-        print(X.shape, Y.shape)
         return X, Y
 
     def __len__(self):
@@ -330,7 +329,7 @@ if __name__ == "__main__":
         with open(data_dir + "valid_test_filepaths", mode="w") as f:
             f.write("\n".join(valid_test_filepaths))
 
-    train_generator = DataLoader(valid_train_filepaths, batch_size=1)
+    train_generator = DataLoader(valid_train_filepaths, batch_size=32)
 
     unet_model = unet(down_sampling=4)
 
