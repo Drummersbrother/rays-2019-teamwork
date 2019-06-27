@@ -237,6 +237,10 @@ def unet(pretrained_weights=None, input_size=(1024, 1024, 1), down_sampling=4):
     return model
 
 
+def preprocess_image(image_array):
+    return image_array
+
+
 if __name__ == "__main__":
     train_data_pref = data_dir + "train_png"
     test_data_pref = data_dir + "test_png"
@@ -261,6 +265,7 @@ if __name__ == "__main__":
 
         def store_np_file(filepath):
             a = np.asarray(Image.open(filepath[:-4]+".png"))
+            a = preprocess_image(a)
             a = np.expand_dims(a, axis=2)
             np.save(filepath, a)
 
@@ -272,12 +277,6 @@ if __name__ == "__main__":
             if inx % 10 == 0:
                 print(inx)
             store_np_file(f)
-
-        import time
-        s = time.time()
-        for fname in valid_train_filepaths:
-            np.load(fname)
-        print(round(time.time() - s, 4))
 
         with open(data_dir + "valid_train_filepaths", mode="w") as f:
             f.write("\n".join(valid_train_filepaths))
