@@ -51,7 +51,7 @@ class DataLoader(keras.utils.Sequence):
         train_rle_data = pd.read_csv(os.getcwd() + "/data" + "/train-rle.csv", header=None, index_col=0)
         X = np.array(Image.open(filepath))
         X = np.expand_dims(X, axis=2)
-        y_raw = str(train_rle_data.loc[filepath.split('/')[-1][:-4], 1])
+        y_raw = str(train_rle_data.loc[filepath.split(os.sep)[-1][:-4], 1])
         if len(y_raw.split()) != 1:
             Y = np.expand_dims(rle2mask(y_raw, *self.dim).T, axis=2)
         else:
@@ -87,8 +87,9 @@ def check_valid_datafile(filepath, rle_df, needs_label=True):
 
     if needs_label:
         try:
-            str(rle_df.loc[filepath.split('/')[-1][:-4], 1])
-        except:
+            str(rle_df.loc[filepath.split(os.sep)[-1][:-4], 1])
+        except Exception as e:
+            print(e)
             print(f"Skipping loading of {filepath}, file doesn't have label when it should")
             return False
     return True
@@ -307,6 +308,7 @@ if __name__ == "__main__":
     except FileNotFoundError:
         print("Re-checking which data files are valid")
         rle_data = pd.read_csv(os.path.join(os.getcwd(), "data", "train-rle.csv"), header=None, index_col=0)
+        print(os.path.join(os.getcwd(), "data", "train-rle.csv"), rle_data)
         valid_train_filepaths = [file_path for file_path in
                                  glob(os.path.join(train_data_pref, "*.png"), recursive=True)
                                  if check_valid_datafile(file_path, rle_data)]
@@ -321,7 +323,7 @@ if __name__ == "__main__":
         with open(data_dir + "valid_test_filepaths", mode="w") as f:
             f.write("\n".join(valid_test_filepaths))
 
-    train_generator = DataLoader(valid_train_filepaths, batch_size=32)
+    train_generator = DataLoader(valid_train_filepaths, batch_size=1)
 
     unet_model = unet(down_sampling=4)
 
