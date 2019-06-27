@@ -280,9 +280,9 @@ if __name__ == "__main__":
         from multiprocessing import Pool, cpu_count
         import sys
 
-        processing_pool = Pool(cpu_count())
-        processing_pool.map(store_np_file, valid_train_filepaths)
-        processing_pool.map(store_np_file, valid_test_filepaths)
+        with Pool(cpu_count()) as processing_pool:
+            processing_pool.map(store_np_file, valid_train_filepaths)
+            processing_pool.map(store_np_file, valid_test_filepaths)
 
         with open(data_dir + "valid_train_filepaths", mode="w") as f:
             f.write("\n".join(valid_train_filepaths))
