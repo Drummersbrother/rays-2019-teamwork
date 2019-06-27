@@ -177,6 +177,13 @@ def plot_pixel_array(dataset, figsize=(10, 10)):
 
 
 def unet(pretrained_weights=None, input_size=(1024, 1024, 1), down_sampling=4):
+    def dice_loss(y_true, y_pred):
+        numerator = 2 * tf.reduce_sum(y_true * y_pred)
+        # some implementations don't square y_pred
+        denominator = tf.reduce_sum(y_true + tf.square(y_pred))
+
+        return 1 - (numerator / (denominator + tf.keras.backend.epsilon()))
+
     """Almost directly taken from https://github.com/zhixuhao/unet. Modified to fit into memory"""
     inputs = klayer.Input(input_size)
     # Rescale to not take too much memory
@@ -227,7 +234,7 @@ def unet(pretrained_weights=None, input_size=(1024, 1024, 1), down_sampling=4):
 
     model = tf.keras.Model(inputs=inputs, outputs=klayer.UpSampling2D(size=(down_sampling, down_sampling))(conv10))
 
-    model.compile(optimizer=keras.optimizers.Adam(lr=1e-4), loss='mse', metrics=['accuracy'])
+    model.compile(optimizer=keras.optimizers.Adam(lr=1e-4), loss=dice_loss, metrics=[dice_loss])
 
     # model.summary()
 
