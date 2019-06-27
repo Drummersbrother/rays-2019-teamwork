@@ -6,6 +6,7 @@ from tensorflow import keras
 from matplotlib import pyplot as plt
 import matplotlib as mpl
 from skimage.color import label2rgb
+import time
 
 import os
 from glob import glob
@@ -36,6 +37,7 @@ class DataLoader(keras.utils.Sequence):
             np.random.shuffle(self.indices)
 
     def __data_generation(self, filepaths):
+        t1 = time.time()
         """Generates data containing batch_size samples"""  # X : (n_samples, *dim, n_channels)
         # Initialization
         X = np.empty((self.batch_size, *self.dim, 1), dtype=np.uint8)
@@ -46,6 +48,7 @@ class DataLoader(keras.utils.Sequence):
             # Store sample
             X[i,], Y[i] = self.load_filepath(filepath)
 
+        print(" ",time.time()-t1)
         return X, Y
 
     def load_filepath(self, filepath):
@@ -290,7 +293,7 @@ if __name__ == "__main__":
         with open(data_dir + "valid_test_filepaths", mode="w") as f:
             f.write("\n".join(valid_test_filepaths))
 
-    train_generator = DataLoader(valid_train_filepaths, batch_size=1)
+    train_generator = DataLoader(valid_train_filepaths, batch_size=8)
 
     unet_model = unet(down_sampling=4)
 
