@@ -8,5 +8,3 @@ with tf.device('/gpu:0'):
 with tf.Session() as sess:
     print (sess.run(c))
 '''
-from tensorflow.python.client import device_lib
-print(device_lib.list_local_devices())
