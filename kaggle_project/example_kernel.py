@@ -28,6 +28,7 @@ class DataLoader(keras.utils.Sequence):
         self.indices = np.arange((len(self.filepaths)))
         self.shuffle = shuffle
         self.on_epoch_end()
+        self.csv = pd.read_csv(os.path.join(os.getcwd(), "data", "train-rle.csv"), header=None, index_col=0)
 
     def on_epoch_end(self):
         """Updates indexes after each epoch"""
@@ -48,10 +49,8 @@ class DataLoader(keras.utils.Sequence):
         return X, Y
 
     def load_filepath(self, filepath):
-        train_rle_data = pd.read_csv(os.path.join(os.getcwd(), "data", "train-rle.csv"), header=None, index_col=0)
-        X = np.array(Image.open(filepath))
-        X = np.expand_dims(X, axis=2)
-        y_raw = str(train_rle_data.loc[filepath.split(os.sep)[-1][:-4], 1])
+        X = np.load(filepath)
+        y_raw = str(self.csv.loc[filepath.split(os.sep)[-1][:-4], 1])
         if len(y_raw.split()) != 1:
             Y = np.expand_dims(rle2mask(y_raw, *self.dim).T, axis=2)
         else:
@@ -249,15 +248,36 @@ if __name__ == "__main__":
     except FileNotFoundError:
         print("Re-checking which data files are valid")
         rle_data = pd.read_csv(os.path.join(os.getcwd(), "data", "train-rle.csv"), header=None, index_col=0)
-        print(os.path.join(os.getcwd(), "data", "train-rle.csv"), rle_data)
-        valid_train_filepaths = [file_path for file_path in
+        valid_train_filepaths = [file_path[:-4]+".npy" for file_path in
                                  glob(os.path.join(train_data_pref, "*.png"), recursive=True)
                                  if check_valid_datafile(file_path, rle_data)]
-        valid_test_filepaths = [file_path for file_path in
+        valid_test_filepaths = [file_path[:-4]+".npy" for file_path in
                                 glob(os.path.join(test_data_pref, "*.png"), recursive=True)
                                 if check_valid_datafile(file_path, rle_data, needs_label=False)]
 
         print(len(valid_test_filepaths), len(valid_train_filepaths))
+
+        print("Converting all files into numpy-native format")
+
+        def store_np_file(filepath):
+            a = np.asarray(Image.open(filepath[:-4]+".png"))
+            a = np.expand_dims(a, axis=2)
+            np.save(filepath, a)
+
+        for inx, f in enumerate(valid_train_filepaths):
+            if inx % 10 == 0:
+                print(inx)
+            store_np_file(f)
+        for inx, f in enumerate(valid_test_filepaths):
+            if inx % 10 == 0:
+                print(inx)
+            store_np_file(f)
+
+        import time
+        s = time.time()
+        for fname in valid_train_filepaths:
+            np.load(fname)
+        print(round(time.time() - s, 4))
 
         with open(data_dir + "valid_train_filepaths", mode="w") as f:
             f.write("\n".join(valid_train_filepaths))
