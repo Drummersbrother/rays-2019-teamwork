@@ -367,3 +367,5 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+kaggle_project/data

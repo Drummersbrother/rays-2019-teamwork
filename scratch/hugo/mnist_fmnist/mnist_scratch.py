@@ -4,6 +4,9 @@ from tensorflow import keras
 from matplotlib import pyplot as plt
 import matplotlib as mpl
 
+config = tf.compat.v1.ConfigProto( device_count = {'GPU': 1 , 'CPU': 3} ) 
+sess = tf.compat.v1.Session(config=config) 
+keras.backend.set_session(sess)
 
 def show_pic(pic):
     plt.figure()
@@ -46,8 +49,9 @@ def get_model(use_saved=False, model_fname=None):
     # Our network has a flattening layer, as we don't keep spatial data
     model = keras.models.Sequential([
         keras.layers.Flatten(input_shape=(28, 28)),
-        keras.layers.Dense(100), keras.layers.LeakyReLU(),
-        keras.layers.Dense(25), keras.layers.LeakyReLU(),
+        keras.layers.Dense(10), keras.layers.LeakyReLU(),
+        keras.layers.Dense(10), keras.layers.LeakyReLU(),
+        keras.layers.Dense(10), keras.layers.LeakyReLU(),
         keras.layers.Dense(10), keras.layers.Softmax()
     ])
 
@@ -72,11 +76,12 @@ if __name__ == "__main__":
     # Our network has a flattening layer, as we don't keep spatial data
     model_filename = "simple_mnist_dense" + f"_{n_epochs}e_{lr}lr"
     model = get_model(True, model_filename)
-
+'''
     # We choose the "functional" hyperparameters
     model.compile(optimizer=keras.optimizers.Adam(lr=lr), loss="mse")
 
     # We only train the network on training data
+    #with tf.device("/gpu:0"):
     model_history = model.fit(train_images, train_labels, epochs=n_epochs, use_multiprocessing=True)
 
     model.save("models/"+model_filename)
@@ -92,3 +97,4 @@ if __name__ == "__main__":
     plt.xlabel('Epoch')
     plt.legend(['Train'], loc='upper left')
     plt.show()
+'''
