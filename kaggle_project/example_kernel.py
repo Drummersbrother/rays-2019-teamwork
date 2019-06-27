@@ -247,8 +247,9 @@ def unet(pretrained_weights=None, input_size=(1024, 1024, 1), down_sampling=4):
     return model
 
 
-def preprocess_image(image_array):
-    return image_array
+def preprocess_image(image_array: np.ndarray):
+    scaled_image_array = (image_array.astype(np.float16) - 128) / 128
+    return scaled_image_array
 
 
 if __name__ == "__main__":
@@ -279,14 +280,12 @@ if __name__ == "__main__":
             a = np.expand_dims(a, axis=2)
             np.save(filepath, a)
 
-        for inx, f in enumerate(valid_train_filepaths):
-            if inx % 10 == 0:
-                print(inx)
-            store_np_file(f)
-        for inx, f in enumerate(valid_test_filepaths):
-            if inx % 10 == 0:
-                print(inx)
-            store_np_file(f)
+        from multiprocessing import Pool, cpu_count
+        import sys
+
+        processing_pool = Pool(cpu_count())
+        processing_pool.map(store_np_file, valid_train_filepaths)
+        processing_pool.map(store_np_file, valid_test_filepaths)
 
         with open(data_dir + "valid_train_filepaths", mode="w") as f:
             f.write("\n".join(valid_train_filepaths))
