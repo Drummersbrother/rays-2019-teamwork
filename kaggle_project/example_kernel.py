@@ -10,7 +10,6 @@ import time
 
 import os
 from glob import glob
-#import pydicom
 from matplotlib import cm
 
 import tensorflow.keras.layers as klayer
@@ -56,6 +55,7 @@ class DataLoader(keras.utils.Sequence):
         y_raw = str(self.csv.loc[filepath.split(os.sep)[-1][:-4], 1])
         if len(y_raw.split()) != 1:
             Y = np.expand_dims(rle2mask(y_raw, *self.dim).T, axis=2)
+            Y = (Y-127.5)/128
         else:
             Y = np.zeros((*self.dim, 1))
         return X, Y
@@ -237,7 +237,7 @@ def unet(pretrained_weights=None, input_size=(1024, 1024, 1), down_sampling=4):
 
     model = tf.keras.Model(inputs=inputs, outputs=klayer.UpSampling2D(size=(down_sampling, down_sampling))(conv10))
 
-    model.compile(optimizer=keras.optimizers.Adam(lr=1e-4), loss=dice_loss, metrics=[dice_loss])
+    model.compile(optimizer=keras.optimizers.Adam(lr=1e-4), loss=keras.losses.binary_crossentropy, metrics=[dice_loss])
 
     # model.summary()
 
@@ -253,6 +253,7 @@ def preprocess_image(image_array: np.ndarray):
 
 
 if __name__ == "__main__":
+
     train_data_pref = data_dir + "train_png"
     test_data_pref = data_dir + "test_png"
 
@@ -293,6 +294,18 @@ if __name__ == "__main__":
             f.write("\n".join(valid_test_filepaths))
 
     train_generator = DataLoader(valid_train_filepaths, batch_size=8)
+
+    for valid_train_filepath in valid_train_filepaths:
+        mx, my = train_generator.load_filepath(valid_train_filepath)
+        if 100000 > my.sum() > 20000:
+            y_raw = str(train_generator.csv.loc[valid_train_filepath.split(os.sep)[-1][:-4], 1])
+            print(y_raw)
+            print(my.sum(), my.max(), my.min())
+
+
+            plt.imshow(np.reshape(my, (1024, 1024)))
+            plt.show()
+    exit()
 
     unet_model = unet(down_sampling=4)
 
