@@ -49,6 +49,7 @@ class DataLoader(keras.utils.Sequence):
     def load_filepath(self, filepath):
         train_rle_data = pd.read_csv(os.getcwd() + "/data" + "/train-rle.csv", header=None, index_col=0)
         dataset = pydicom.dcmread(filepath, force=True)
+
         X = np.expand_dims(dataset.pixel_array, axis=2)
         y_raw = str(train_rle_data.loc[filepath.split('/')[-1][:-4], 1])
 
@@ -80,10 +81,17 @@ class DataLoader(keras.utils.Sequence):
 def check_valid_datafile(filepath, rle_df, needs_label=True):
     # We try to load each file in order to find which ones are invalid
     try:
-        pydicom.dcmread(filepath, force=True)
+        dataset = pydicom.dcmread(filepath, force=True)
     except Exception as e:
         print(e)
         print(f"Skipping loading of {filepath}, file didn't load as a DICOM correctly")
+        return False
+
+    try:
+        l = dataset.pixel_array
+    except Exception as e:
+        print(e)
+        print(f"Skipping loading of {filepath}, file was probably a Google error message")
         return False
 
     if needs_label:
@@ -177,7 +185,8 @@ def plot_pixel_array(dataset, figsize=(10, 10)):
     plt.show()
 
 
-def unet(pretrained_weights=None, input_size=(1024, 1024, 1)):
+def original_unet(pretrained_weights=None, input_size=(1024, 1024, 1)):
+    """Almost directly taken from https://github.com/zhixuhao/unet"""
     inputs = klayer.Input(input_size)
     conv1 = klayer.Conv2D(64, 3, activation='relu', padding='same', kernel_initializer='he_normal')(inputs)
     conv1 = klayer.Conv2D(64, 3, activation='relu', padding='same', kernel_initializer='he_normal')(conv1)
@@ -235,6 +244,67 @@ def unet(pretrained_weights=None, input_size=(1024, 1024, 1)):
     return model
 
 
+def unet(pretrained_weights=None, input_size=(1024, 1024, 1), down_sampling=4):
+    """Almost directly taken from https://github.com/zhixuhao/unet. Modified to fit into memory"""
+    inputs = klayer.Input(input_size)
+    # Rescale to not take too much memory
+    scaled_inputs = klayer.MaxPooling2D(pool_size=(down_sampling, down_sampling))(inputs)
+    conv1 = klayer.Conv2D(64, 3, activation='relu', padding='same', kernel_initializer='he_normal')(scaled_inputs)
+    conv1 = klayer.Conv2D(64, 3, activation='relu', padding='same', kernel_initializer='he_normal')(conv1)
+    pool1 = klayer.MaxPooling2D(pool_size=(2, 2))(conv1)
+    conv2 = klayer.Conv2D(128, 3, activation='relu', padding='same', kernel_initializer='he_normal')(pool1)
+    conv2 = klayer.Conv2D(128, 3, activation='relu', padding='same', kernel_initializer='he_normal')(conv2)
+    pool2 = klayer.MaxPooling2D(pool_size=(2, 2))(conv2)
+    conv3 = klayer.Conv2D(256, 3, activation='relu', padding='same', kernel_initializer='he_normal')(pool2)
+    conv3 = klayer.Conv2D(256, 3, activation='relu', padding='same', kernel_initializer='he_normal')(conv3)
+    pool3 = klayer.MaxPooling2D(pool_size=(2, 2))(conv3)
+    conv4 = klayer.Conv2D(512, 3, activation='relu', padding='same', kernel_initializer='he_normal')(pool3)
+    conv4 = klayer.Conv2D(512, 3, activation='relu', padding='same', kernel_initializer='he_normal')(conv4)
+    drop4 = klayer.Dropout(0.5)(conv4)
+    pool4 = klayer.MaxPooling2D(pool_size=(2, 2))(drop4)
+
+    conv5 = klayer.Conv2D(1024, 3, activation='relu', padding='same', kernel_initializer='he_normal')(pool4)
+    conv5 = klayer.Conv2D(1024, 3, activation='relu', padding='same', kernel_initializer='he_normal')(conv5)
+    drop5 = klayer.Dropout(0.5)(conv5)
+
+    up6 = klayer.Conv2D(512, 2, activation='relu', padding='same', kernel_initializer='he_normal')(
+        klayer.UpSampling2D(size=(2, 2))(drop5))
+    merge6 = klayer.concatenate([drop4, up6], axis=3)
+    conv6 = klayer.Conv2D(512, 3, activation='relu', padding='same', kernel_initializer='he_normal')(merge6)
+    conv6 = klayer.Conv2D(512, 3, activation='relu', padding='same', kernel_initializer='he_normal')(conv6)
+
+    up7 = klayer.Conv2D(256, 2, activation='relu', padding='same', kernel_initializer='he_normal')(
+        klayer.UpSampling2D(size=(2, 2))(conv6))
+    merge7 = klayer.concatenate([conv3, up7], axis=3)
+    conv7 = klayer.Conv2D(256, 3, activation='relu', padding='same', kernel_initializer='he_normal')(merge7)
+    conv7 = klayer.Conv2D(256, 3, activation='relu', padding='same', kernel_initializer='he_normal')(conv7)
+
+    up8 = klayer.Conv2D(128, 2, activation='relu', padding='same', kernel_initializer='he_normal')(
+        klayer.UpSampling2D(size=(2, 2))(conv7))
+    merge8 = klayer.concatenate([conv2, up8], axis=3)
+    conv8 = klayer.Conv2D(128, 3, activation='relu', padding='same', kernel_initializer='he_normal')(merge8)
+    conv8 = klayer.Conv2D(128, 3, activation='relu', padding='same', kernel_initializer='he_normal')(conv8)
+
+    up9 = klayer.Conv2D(64, 2, activation='relu', padding='same', kernel_initializer='he_normal')(
+        klayer.UpSampling2D(size=(2, 2))(conv8))
+    merge9 = klayer.concatenate([conv1, up9], axis=3)
+    conv9 = klayer.Conv2D(64, 3, activation='relu', padding='same', kernel_initializer='he_normal')(merge9)
+    conv9 = klayer.Conv2D(64, 3, activation='relu', padding='same', kernel_initializer='he_normal')(conv9)
+    conv9 = klayer.Conv2D(2, 3, activation='relu', padding='same', kernel_initializer='he_normal')(conv9)
+    conv10 = klayer.Conv2D(1, 1, activation='sigmoid')(conv9)
+
+    model = tf.keras.Model(inputs=inputs, outputs=klayer.UpSampling2D(size=(down_sampling, down_sampling))(conv10))
+
+    model.compile(optimizer=keras.optimizers.Adam(lr=1e-4), loss='binary_crossentropy', metrics=['accuracy'])
+
+    # model.summary()
+
+    if (pretrained_weights):
+        model.load_weights(pretrained_weights)
+
+    return model
+
+
 if __name__ == "__main__":
     train_data_pref = data_dir + "dicom-images-train"
     test_data_pref = data_dir + "dicom-images-test"
@@ -262,6 +332,6 @@ if __name__ == "__main__":
 
     train_generator = DataLoader(valid_train_filepaths, batch_size=1)
 
-    unet_model = unet()
+    unet_model = unet(down_sampling=4)
 
     unet_model.fit_generator(train_generator, epochs=1)
