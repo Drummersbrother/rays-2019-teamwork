@@ -63,8 +63,8 @@ class DataLoader(keras.utils.Sequence):
         Y = np.load(os.path.join(self.mask_dir, filepath.split(os.sep)[-1])[:-4]).T
         #y_rle = self.rles[filepath.split(os.sep)[-1][:-4]]
         #Y = rle2mask(y_rle, *self.dim).T
-        #Y = np.reshape(Y, self.dim)
-        #Y = np.expand_dims(Y, axis=2)
+        Y = np.reshape(Y, self.dim)
+        Y = np.expand_dims(Y, axis=2)
         return X, Y
 
     def __len__(self):
@@ -238,6 +238,25 @@ def unet(learning_rate, pretrained_weights=None, input_size=(1024, 1024, 1), dow
     return model
 
 
+def smet(learning_rate, pretrained_weights=None, input_size=(1024, 1024, 1), down_sampling=4):
+    """Almost directly taken from https://github.com/zhixuhao/unet. Modified to fit into memory"""
+    inputs = klayer.Input(input_size)
+    # Rescale to not take too much memory
+    scaled_inputs = klayer.MaxPooling2D(pool_size=(down_sampling, down_sampling))(inputs)
+    conv1 = klayer.Conv2D(64, 5, activation='tanh', padding='same', kernel_initializer='he_normal')(scaled_inputs)
+    conv1 = klayer.Conv2D(1, 5, activation='tanh', padding='same', kernel_initializer='he_normal')(conv1)
+    model = tf.keras.Model(inputs=inputs, outputs=klayer.UpSampling2D(size=(down_sampling, down_sampling))(conv1))
+
+    model.compile(optimizer=keras.optimizers.Adam(lr=learning_rate), loss=keras.losses.MSE, metrics=["accuracy"])
+
+    # model.summary()
+
+    if pretrained_weights:
+        model.load_weights(pretrained_weights)
+
+    return model
+
+
 def preprocess_image(image_array: np.ndarray):
     scaled_image_array = (image_array.astype(np.float16) - 128) / 128
     return scaled_image_array
@@ -247,6 +266,7 @@ def preprocess_mask(mask: np.ndarray):
     mask = mask-128
     mask = mask/128
     return mask
+
 
 tensorboard = TensorBoard(log_dir='C:\\rays-2019-teamwork\\kaggle_project\\logdir', histogram_freq=1, write_graph=True, write_images=True)
 
@@ -325,21 +345,21 @@ if __name__ == "__main__":
 
     print("Setup done!")
 
-    train_net = False
+    train_net = True
     use_pretrained = True
     # Network and training params
     n_epochs = 1
-    batch_size = 1
-    img_downsampling = 4
+    batch_size = 10
+    img_downsampling = 16
     learning_rate = 1e-4
-    net_arch = "unet"
+    net_arch = "smet"
 
     # The file in which trained weights are going to be stored
     net_filename = f"{net_arch}-epochs:{n_epochs}-batchsz:{batch_size}-lr:{learning_rate}-downsampling:{img_downsampling}"
 
     if train_net:
         print("Training network!")
-        train_generator = DataLoader(valid_train_filepaths[:100], batch_size=batch_size)
+        train_generator = DataLoader(valid_train_filepaths[:100], batch_size=batch_size, mask_dir=os.path.join(data_dir, "train_png", "masks"))
         model = locals()[net_arch](down_sampling=img_downsampling, learning_rate=learning_rate)
 
         model.fit_generator(train_generator, epochs=n_epochs, use_multiprocessing=True, callbacks=[tensorboard])
