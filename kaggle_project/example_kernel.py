@@ -305,16 +305,31 @@ if __name__ == "__main__":
             with open(os.path.join(data_dir, "train_png", "masks", key), mode="wb") as f:
                 np.save(f, mask)
 
+        return os.path.join(data_dir, "train_png", "masks", key)
+
     mask_processing_pool = Pool(cpu_count())
-    map(check_store_mask_file, raw_rle.split("\n"))
+    try:
+        with open(os.path.join(data_dir, "valid_mask_paths"), mode="r") as f:
+            valid_mask_paths = f.read().split("\n")
+            print("Used precomputed valid mask paths")
+    except FileNotFoundError:
+        valid_mask_paths = []
+        print("Computing valid mask paths")
+        for key in raw_rle.split("\n"):
+            valid_mask_paths.append(check_store_mask_file(key))
+
+        with open(os.path.join(data_dir, "valid_mask_paths"), mode="w") as f:
+            f.write("\n".join(valid_mask_paths))
+
+        print("Done computing valid mask paths")
 
     print("Setup done!")
 
     train_net = False
     use_pretrained = True
     # Network and training params
-    n_epochs = 10
-    batch_size = 8
+    n_epochs = 1
+    batch_size = 1
     img_downsampling = 4
     learning_rate = 1e-4
     net_arch = "unet"
