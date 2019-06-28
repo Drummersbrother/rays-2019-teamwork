@@ -133,7 +133,7 @@ def mask2rle(img, width, height):
 def rle2mask(rle, width, height):
     mask = np.zeros(width * height)
     if rle[0] == "-1":
-        return mask
+        return np.ones(height*width)*255
     split_data = [x for x in rle if x.isdigit()]
     array_data = [int(x) for x in split_data]
     array = np.asarray(array_data)
@@ -311,14 +311,14 @@ if __name__ == "__main__":
     train_net = False
     use_pretrained = True
     # Network and training params
-    n_epochs = 10
+    n_epochs = 1
     batch_size = 8
     img_downsampling = 4
     learning_rate = 1e-4
     net_arch = "unet"
 
     # The file in which trained weights are going to be stored
-    net_filename = f"{net_arch}-epochs:{n_epochs}-batchsz:{batch_size}-lr:{learning_rate}-downsampling:{img_downsampling}"
+    net_filename = f"{net_arch}-epochs_{n_epochs}-batchsz_{batch_size}-lr_{learning_rate}-downsampling_{img_downsampling}"
 
     if train_net:
         print("Training network!")
