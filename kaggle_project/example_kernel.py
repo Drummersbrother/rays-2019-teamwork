@@ -4,6 +4,7 @@ from PIL import Image
 import pandas as pd
 from tensorflow import keras
 from matplotlib import pyplot as plt
+from multiprocessing import Pool, cpu_count
 import matplotlib as mpl
 from skimage.color import label2rgb
 import time
@@ -13,8 +14,6 @@ from glob import glob
 from matplotlib import cm
 
 import tensorflow.keras.layers as klayer
-
-import numpy as np
 
 data_dir = os.getcwd() + os.sep + "data" + os.sep
 
@@ -29,6 +28,15 @@ class DataLoader(keras.utils.Sequence):
         self.shuffle = shuffle
         self.on_epoch_end()
         self.csv = pd.read_csv(os.path.join(os.getcwd(), "data", "train-rle.csv"), header=None, index_col=0)
+        with open(os.path.join(os.getcwd(), "data", "train-rle.csv"), mode="r") as f:
+            raw_rle = f.read()
+
+        self.rles = {}
+
+        for line in raw_rle.split("\n"):
+            key, rle_data = line.split(",")
+            rle_data = [x for x in rle_data.split() if x != ""]
+            self.rles[key] = rle_data
 
     def on_epoch_end(self):
         """Updates indexes after each epoch"""
@@ -36,7 +44,6 @@ class DataLoader(keras.utils.Sequence):
             np.random.shuffle(self.indices)
 
     def __data_generation(self, filepaths):
-        t1 = time.time()
         """Generates data containing batch_size samples"""  # X : (n_samples, *dim, n_channels)
         # Initialization
         X = np.empty((self.batch_size, *self.dim, 1), dtype=np.uint8)
@@ -47,17 +54,14 @@ class DataLoader(keras.utils.Sequence):
             # Store sample
             X[i,], Y[i] = self.load_filepath(filepath)
 
-        print(" ",time.time()-t1)
         return X, Y
 
     def load_filepath(self, filepath):
         X = np.load(filepath)
-        y_raw = str(self.csv.loc[filepath.split(os.sep)[-1][:-4], 1])
-        if len(y_raw.split()) != 1:
-            Y = np.expand_dims(rle2mask(y_raw, *self.dim).T, axis=2)
-            Y = (Y-127.5)/128
-        else:
-            Y = np.zeros((*self.dim, 1))
+        y_rle = self.rles[filepath.split(os.sep)[-1][:-4]]
+        Y = rle2mask(y_rle, *self.dim).T
+        Y = np.reshape(Y, self.dim)
+        Y = np.expand_dims(Y, axis=2)
         return X, Y
 
     def __len__(self):
@@ -127,13 +131,10 @@ def mask2rle(img, width, height):
 
 def rle2mask(rle, width, height):
     mask = np.zeros(width * height)
-    split_data = rle.split()
-    array_data = []
-    for x in split_data:
-        try:
-            array_data.append(int(x))
-        except ValueError:
-            pass
+    if rle[0] == "-1":
+        return mask
+    split_data = [x for x in rle if x.isdigit()]
+    array_data = [int(x) for x in split_data]
     array = np.asarray(array_data)
     starts = array[0::2]
     lengths = array[1::2]
@@ -173,13 +174,7 @@ def rle2mask(rle, width, height):
 #             print("Pixel spacing....:", dataset.PixelSpacing)
 
 
-def plot_pixel_array(dataset, figsize=(10, 10)):
-    plt.figure(figsize=figsize)
-    plt.imshow(dataset.pixel_array, cmap=plt.cm.bone)
-    plt.show()
-
-
-def unet(pretrained_weights=None, input_size=(1024, 1024, 1), down_sampling=4):
+def unet(learning_rate, pretrained_weights=None, input_size=(1024, 1024, 1), down_sampling=4):
     def dice_loss(y_true, y_pred):
         numerator = 2 * tf.reduce_sum(y_true * y_pred)
         # some implementations don't square y_pred
@@ -237,7 +232,7 @@ def unet(pretrained_weights=None, input_size=(1024, 1024, 1), down_sampling=4):
 
     model = tf.keras.Model(inputs=inputs, outputs=klayer.UpSampling2D(size=(down_sampling, down_sampling))(conv10))
 
-    model.compile(optimizer=keras.optimizers.Adam(lr=1e-4), loss=keras.losses.binary_crossentropy, metrics=[dice_loss])
+    model.compile(optimizer=keras.optimizers.Adam(lr=learning_rate), loss=keras.losses.binary_crossentropy, metrics=[dice_loss])
 
     # model.summary()
 
@@ -250,6 +245,12 @@ def unet(pretrained_weights=None, input_size=(1024, 1024, 1), down_sampling=4):
 def preprocess_image(image_array: np.ndarray):
     scaled_image_array = (image_array.astype(np.float16) - 128) / 128
     return scaled_image_array
+
+
+def preprocess_mask(mask: np.ndarray):
+    mask = mask-128
+    mask = mask/128
+    return mask
 
 
 if __name__ == "__main__":
@@ -281,7 +282,6 @@ if __name__ == "__main__":
             a = np.expand_dims(a, axis=2)
             np.save(filepath, a)
 
-        from multiprocessing import Pool, cpu_count
         import sys
 
         with Pool(cpu_count()) as processing_pool:
@@ -293,20 +293,56 @@ if __name__ == "__main__":
         with open(data_dir + "valid_test_filepaths", mode="w") as f:
             f.write("\n".join(valid_test_filepaths))
 
-    train_generator = DataLoader(valid_train_filepaths, batch_size=8)
+    with open(os.path.join(os.getcwd(), "data", "train-rle.csv"), mode="r") as f:
+        raw_rle = f.read()
 
-    for valid_train_filepath in valid_train_filepaths:
-        mx, my = train_generator.load_filepath(valid_train_filepath)
-        if 100000 > my.sum() > 20000:
-            y_raw = str(train_generator.csv.loc[valid_train_filepath.split(os.sep)[-1][:-4], 1])
-            print(y_raw)
-            print(my.sum(), my.max(), my.min())
+    def check_store_mask_file(raw_csv_data):
+        key, rle_d = raw_csv_data.split(",")
+        try:
+            with open(os.path.join(data_dir, "train_png", "masks", key), mode="r") as f:
+                pass
+        except FileNotFoundError:
+            rle_d = [x for x in rle_d.split() if x != ""]
+            mask = rle2mask(rle_d, 1024, 1024)
+            mask = preprocess_mask(mask)
+            with open(os.path.join(data_dir, "train_png", "masks", key), mode="wb") as f:
+                np.save(f, mask)
 
+    mask_processing_pool = Pool(cpu_count())
+    mask_processing_pool.map(check_store_mask_file, raw_rle.split("\n"))
 
-            plt.imshow(np.reshape(my, (1024, 1024)))
+    print("Setup done!")
+
+    train_net = True
+    use_pretrained = True
+    # Network and training params
+    n_epochs = 1
+    batch_size = 8
+    img_downsampling = 4
+    learning_rate = 1e-4
+    net_arch = "unet"
+
+    # The file in which trained weights are going to be stored
+    net_filename = f"{net_arch}-epochs:{n_epochs}-batchsz:{batch_size}-lr:{learning_rate}-downsampling:{img_downsampling}"
+
+    if train_net:
+        print("Training network!")
+        train_generator = DataLoader(valid_train_filepaths, batch_size=batch_size)
+        model = locals()[net_arch](down_sampling=img_downsampling, learning_rate=learning_rate)
+
+        model.fit_generator(train_generator, epochs=n_epochs, use_multiprocessing=True)
+        model.save(os.path.join(data_dir + "models", net_filename))
+    else:
+        print("Not training network!")
+        try:
+            print("Loading pretrained network")
+            model = keras.models.load_model(os.path.join(data_dir + "models", net_filename))
+        except:
+            print("Was not able to load model...")
+            raise
+
+        files_to_predict = valid_train_filepaths[:100]
+        preds = model.predict(files_to_predict)
+        for pred in preds:
+            plt.imshow(pred)
             plt.show()
-    exit()
-
-    unet_model = unet(down_sampling=4)
-
-    unet_model.fit_generator(train_generator, epochs=1, use_multiprocessing=True)
