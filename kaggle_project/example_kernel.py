@@ -356,19 +356,17 @@ if __name__ == "__main__":
 
     print("Setup done!")
 
-    train_net = True
-    use_pretrained = True
     # Network and training params
     n_epochs = 10
     batch_size = 10
     img_downsampling = 16
-    learning_rate = 1e-4
+    learning_rate = 1e-2
     net_arch = "smet"
 
     # The file in which trained weights are going to be stored
     net_filename = f"{net_arch}-epochs_{n_epochs}-batchsz_{batch_size}-lr_{learning_rate}-downsampling_{img_downsampling}"
 
-    if train_net:
+    if not os.path.exists(os.path.join(data_dir, "models", net_filename)):
         print("Training network!")
         train_generator = DataLoader(valid_train_filepaths[:100], batch_size=batch_size, mask_dir=os.path.join(data_dir, "train_png", "masks"))
         model = locals()[net_arch](down_sampling=img_downsampling, learning_rate=learning_rate)
