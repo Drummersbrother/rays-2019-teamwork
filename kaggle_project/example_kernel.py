@@ -19,11 +19,12 @@ data_dir = os.getcwd() + os.sep + "data" + os.sep
 
 
 class DataLoader(keras.utils.Sequence):
-    def __init__(self, filepaths, batch_size=32, dim=(1024, 1024), shuffle=True):
+    def __init__(self, filepaths, batch_size=32, dim=(1024, 1024), shuffle=True, mask_dir=""):
         """Initialization"""
         self.dim = dim
         self.batch_size = batch_size
         self.filepaths = filepaths
+        self.mask_dir = mask_dir
         self.indices = np.arange((len(self.filepaths)))
         self.shuffle = shuffle
         self.on_epoch_end()
@@ -58,10 +59,11 @@ class DataLoader(keras.utils.Sequence):
 
     def load_filepath(self, filepath):
         X = np.load(filepath)
-        y_rle = self.rles[filepath.split(os.sep)[-1][:-4]]
-        Y = rle2mask(y_rle, *self.dim).T
-        Y = np.reshape(Y, self.dim)
-        Y = np.expand_dims(Y, axis=2)
+        Y = np.load(os.path.join(self.mask_dir, filepath.split(os.sep)[-1])[:-4]).T
+        #y_rle = self.rles[filepath.split(os.sep)[-1][:-4]]
+        #Y = rle2mask(y_rle, *self.dim).T
+        #Y = np.reshape(Y, self.dim)
+        #Y = np.expand_dims(Y, axis=2)
         return X, Y
 
     def __len__(self):
@@ -334,7 +336,7 @@ if __name__ == "__main__":
             print("Was not able to load model...")
             raise
 
-        train_generator = DataLoader(valid_train_filepaths, batch_size=batch_size)
+        train_generator = DataLoader(valid_train_filepaths, batch_size=batch_size, mask_dir=os.path.join(data_dir, "train_png", "masks"))
         for to_predict in valid_train_filepaths:
             x, y = train_generator.load_filepath(to_predict)
             pred = model.predict(np.asarray([x]))[0]
