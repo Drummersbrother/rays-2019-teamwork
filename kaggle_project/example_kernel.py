@@ -359,14 +359,14 @@ if __name__ == "__main__":
     train_net = True
     use_pretrained = True
     # Network and training params
-    n_epochs = 1
+    n_epochs = 10
     batch_size = 10
     img_downsampling = 16
     learning_rate = 1e-4
     net_arch = "smet"
 
     # The file in which trained weights are going to be stored
-    net_filename = f"{net_arch}-epochs:{n_epochs}-batchsz:{batch_size}-lr:{learning_rate}-downsampling:{img_downsampling}"
+    net_filename = f"{net_arch}-epochs_{n_epochs}-batchsz_{batch_size}-lr_{learning_rate}-downsampling_{img_downsampling}"
 
     if train_net:
         print("Training network!")
