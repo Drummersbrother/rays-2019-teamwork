@@ -175,13 +175,6 @@ def rle2mask(rle, width, height):
 
 
 def unet(learning_rate, pretrained_weights=None, input_size=(1024, 1024, 1), down_sampling=4):
-    def dice_loss(y_true, y_pred):
-        numerator = 2 * tf.reduce_sum(y_true * y_pred)
-        # some implementations don't square y_pred
-        denominator = tf.reduce_sum(y_true + tf.square(y_pred))
-
-        return 1 - (numerator / (denominator + tf.keras.backend.epsilon()))
-
     """Almost directly taken from https://github.com/zhixuhao/unet. Modified to fit into memory"""
     inputs = klayer.Input(input_size)
     # Rescale to not take too much memory
@@ -232,11 +225,11 @@ def unet(learning_rate, pretrained_weights=None, input_size=(1024, 1024, 1), dow
 
     model = tf.keras.Model(inputs=inputs, outputs=klayer.UpSampling2D(size=(down_sampling, down_sampling))(conv10))
 
-    model.compile(optimizer=keras.optimizers.Adam(lr=learning_rate), loss=keras.losses.binary_crossentropy, metrics=[dice_loss])
+    model.compile(optimizer=keras.optimizers.Adam(lr=learning_rate), loss=keras.losses.MSE, metrics=["accuracy"])
 
     # model.summary()
 
-    if (pretrained_weights):
+    if pretrained_weights:
         model.load_weights(pretrained_weights)
 
     return model
@@ -313,11 +306,11 @@ if __name__ == "__main__":
 
     print("Setup done!")
 
-    train_net = True
+    train_net = False
     use_pretrained = True
     # Network and training params
     n_epochs = 1
-    batch_size = 8
+    batch_size = 1
     img_downsampling = 4
     learning_rate = 1e-4
     net_arch = "unet"
@@ -327,7 +320,7 @@ if __name__ == "__main__":
 
     if train_net:
         print("Training network!")
-        train_generator = DataLoader(valid_train_filepaths, batch_size=batch_size)
+        train_generator = DataLoader(valid_train_filepaths[:2], batch_size=batch_size)
         model = locals()[net_arch](down_sampling=img_downsampling, learning_rate=learning_rate)
 
         model.fit_generator(train_generator, epochs=n_epochs, use_multiprocessing=True)
@@ -341,8 +334,15 @@ if __name__ == "__main__":
             print("Was not able to load model...")
             raise
 
-        files_to_predict = valid_train_filepaths[:100]
-        preds = model.predict(files_to_predict)
-        for pred in preds:
-            plt.imshow(pred)
+        train_generator = DataLoader(valid_train_filepaths, batch_size=batch_size)
+        for to_predict in valid_train_filepaths:
+            x, y = train_generator.load_filepath(to_predict)
+            pred = model.predict(np.asarray([x]))[0]
+            fig = plt.figure(figsize=(2, 2))
+            fig.add_subplot(2, 2, 1)
+            plt.imshow(pred.reshape((1024, 1024)), vmin=0, vmax=1)
+            fig.add_subplot(2, 2, 2)
+            plt.imshow(x.reshape((1024, 1024)).astype(np.float64), vmin=-1, vmax=1)
+            fig.add_subplot(2, 2, 3)
+            plt.imshow(y.reshape((1024, 1024)), vmin=0, vmax=1)
             plt.show()
