@@ -59,12 +59,14 @@ class DataLoader(keras.utils.Sequence):
         return X, Y
 
     def load_filepath(self, filepath):
-        X = np.load(filepath)
+        a = np.asarray(Image.open(filepath[:-4]+".png"))
+        a = preprocess_image(a)
+        X = np.expand_dims(a, axis=2)
         Y = np.load(os.path.join(self.mask_dir, filepath.split(os.sep)[-1])[:-4]).T
         #y_rle = self.rles[filepath.split(os.sep)[-1][:-4]]
         #Y = rle2mask(y_rle, *self.dim).T
-        #Y = np.reshape(Y, self.dim)
-        #Y = np.expand_dims(Y, axis=2)
+        Y = np.reshape(Y, self.dim)
+        Y = np.expand_dims(Y, axis=2)
         return X, Y
 
     def __len__(self):
@@ -274,16 +276,21 @@ if __name__ == "__main__":
         print("Converting all files into numpy-native format")
 
         def store_np_file(filepath):
-            a = np.asarray(Image.open(filepath[:-4]+".png"))
-            a = preprocess_image(a)
-            a = np.expand_dims(a, axis=2)
-            np.save(filepath, a)
+            pass#a = np.asarray(Image.open(filepath[:-4]+".png"))
+            #a = preprocess_image(a)
+            #a = np.expand_dims(a, axis=2)
+            #np.save(filepath, a)
 
         import sys
 
-        with Pool(cpu_count()) as processing_pool:
-            processing_pool.map(store_np_file, valid_train_filepaths)
-            processing_pool.map(store_np_file, valid_test_filepaths)
+        for inx, f in enumerate(valid_test_filepaths):
+            store_np_file(f)
+            if inx % 100 == 0:
+                print(inx)
+        for inx, f in enumerate(valid_train_filepaths):
+            store_np_file(f)
+            if inx % 100 == 0:
+                print(inx)
 
         with open(data_dir + "valid_train_filepaths", mode="w") as f:
             f.write("\n".join(valid_train_filepaths))
@@ -300,8 +307,10 @@ if __name__ == "__main__":
                 pass
         except FileNotFoundError:
             rle_d = [x for x in rle_d.split() if x != ""]
-            mask = rle2mask(rle_d, 1024, 1024)
-            mask = preprocess_mask(mask)
+            mask = rle2mask(rle_d, 1024, 1024).astype(np.bool)
+            plt.imshow(mask)
+            plt.show()
+            #mask = preprocess_mask(mask)
             with open(os.path.join(data_dir, "train_png", "masks", key), mode="wb") as f:
                 np.save(f, mask)
 
@@ -315,8 +324,10 @@ if __name__ == "__main__":
     except FileNotFoundError:
         valid_mask_paths = []
         print("Computing valid mask paths")
-        for key in raw_rle.split("\n"):
+        for inx, key in enumerate(raw_rle.split("\n")):
             valid_mask_paths.append(check_store_mask_file(key))
+            if inx % 100 == 0:
+                print(inx)
 
         with open(os.path.join(data_dir, "valid_mask_paths"), mode="w") as f:
             f.write("\n".join(valid_mask_paths))
@@ -339,9 +350,9 @@ if __name__ == "__main__":
 
     if train_net:
         print("Training network!")
-        train_generator = DataLoader(valid_train_filepaths[:100], batch_size=batch_size)
+        train_generator = DataLoader(valid_train_filepaths[:100], batch_size=batch_size, mask_dir=os.path.join(data_dir, "train_png", "masks"))
         model = locals()[net_arch](down_sampling=img_downsampling, learning_rate=learning_rate)
-
+        print("Fitting")
         model.fit_generator(train_generator, epochs=n_epochs, use_multiprocessing=True, callbacks=[tensorboard])
         model.save(os.path.join(data_dir + "models", net_filename))
     else:
