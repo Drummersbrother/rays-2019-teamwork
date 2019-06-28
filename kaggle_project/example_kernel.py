@@ -14,6 +14,7 @@ from glob import glob
 from matplotlib import cm
 
 import tensorflow.keras.layers as klayer
+from tensorflow.keras.callbacks import TensorBoard
 
 data_dir = os.getcwd() + os.sep + "data" + os.sep
 
@@ -247,6 +248,7 @@ def preprocess_mask(mask: np.ndarray):
     mask = mask/128
     return mask
 
+tensorboard = TensorBoard(log_dir='C:\\rays-2019-teamwork\\kaggle_project\\logdir', histogram_freq=1, write_graph=True, write_images=True)
 
 if __name__ == "__main__":
 
@@ -304,15 +306,15 @@ if __name__ == "__main__":
                 np.save(f, mask)
 
     mask_processing_pool = Pool(cpu_count())
-    mask_processing_pool.map(check_store_mask_file, raw_rle.split("\n"))
+    map(check_store_mask_file, raw_rle.split("\n"))
 
     print("Setup done!")
 
     train_net = False
     use_pretrained = True
     # Network and training params
-    n_epochs = 1
-    batch_size = 1
+    n_epochs = 10
+    batch_size = 8
     img_downsampling = 4
     learning_rate = 1e-4
     net_arch = "unet"
@@ -322,10 +324,10 @@ if __name__ == "__main__":
 
     if train_net:
         print("Training network!")
-        train_generator = DataLoader(valid_train_filepaths[:2], batch_size=batch_size)
+        train_generator = DataLoader(valid_train_filepaths[:100], batch_size=batch_size)
         model = locals()[net_arch](down_sampling=img_downsampling, learning_rate=learning_rate)
 
-        model.fit_generator(train_generator, epochs=n_epochs, use_multiprocessing=True)
+        model.fit_generator(train_generator, epochs=n_epochs, use_multiprocessing=True, callbacks=[tensorboard])
         model.save(os.path.join(data_dir + "models", net_filename))
     else:
         print("Not training network!")
