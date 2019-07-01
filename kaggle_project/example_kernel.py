@@ -32,56 +32,58 @@ def mod_jaccard(y_true, y_pred, smooth=100):
     jac = (intersection + smooth) / (sum_ - intersection + smooth)
     return (1 - jac) * smooth
 
-def unet(learning_rate, pretrained_weights=None, input_size=(1024, 1024, 1), down_sampling=4):
+def unet(learning_rate, pretrained_weights=None, input_size=(1024, 1024, 1), down_sampling=4, out_layer=-1, main_activation="relu"):
     """Almost directly taken from https://github.com/zhixuhao/unet. Modified to fit into memory"""
     inputs = klayer.Input(input_size)
     # Rescale to not take too much memory
     scaled_inputs = klayer.MaxPooling2D(pool_size=(down_sampling, down_sampling))(inputs)
-    conv1 = klayer.Conv2D(64, 3, activation='relu', padding='same', kernel_initializer='he_normal')(scaled_inputs)
-    conv1 = klayer.Conv2D(64, 3, activation='relu', padding='same', kernel_initializer='he_normal')(conv1)
+    conv1 = klayer.Conv2D(64, 3, activation=main_activation, padding='same', kernel_initializer='he_normal')(scaled_inputs)
+    conv1 = klayer.Conv2D(64, 3, activation=main_activation, padding='same', kernel_initializer='he_normal')(conv1)
     pool1 = klayer.MaxPooling2D(pool_size=(2, 2))(conv1)
-    conv2 = klayer.Conv2D(128, 3, activation='relu', padding='same', kernel_initializer='he_normal')(pool1)
-    conv2 = klayer.Conv2D(128, 3, activation='relu', padding='same', kernel_initializer='he_normal')(conv2)
+    conv2 = klayer.Conv2D(128, 3, activation=main_activation, padding='same', kernel_initializer='he_normal')(pool1)
+    conv2 = klayer.Conv2D(128, 3, activation=main_activation, padding='same', kernel_initializer='he_normal')(conv2)
     pool2 = klayer.MaxPooling2D(pool_size=(2, 2))(conv2)
-    conv3 = klayer.Conv2D(256, 3, activation='relu', padding='same', kernel_initializer='he_normal')(pool2)
-    conv3 = klayer.Conv2D(256, 3, activation='relu', padding='same', kernel_initializer='he_normal')(conv3)
+    conv3 = klayer.Conv2D(256, 3, activation=main_activation, padding='same', kernel_initializer='he_normal')(pool2)
+    conv3 = klayer.Conv2D(256, 3, activation=main_activation, padding='same', kernel_initializer='he_normal')(conv3)
     pool3 = klayer.MaxPooling2D(pool_size=(2, 2))(conv3)
-    conv4 = klayer.Conv2D(512, 3, activation='relu', padding='same', kernel_initializer='he_normal')(pool3)
-    conv4 = klayer.Conv2D(512, 3, activation='relu', padding='same', kernel_initializer='he_normal')(conv4)
+    conv4 = klayer.Conv2D(512, 3, activation=main_activation, padding='same', kernel_initializer='he_normal')(pool3)
+    conv4 = klayer.Conv2D(512, 3, activation=main_activation, padding='same', kernel_initializer='he_normal')(conv4)
     drop4 = klayer.Dropout(0.5)(conv4)
     pool4 = klayer.MaxPooling2D(pool_size=(2, 2))(drop4)
 
-    conv5 = klayer.Conv2D(1024, 3, activation='relu', padding='same', kernel_initializer='he_normal')(pool4)
-    conv5 = klayer.Conv2D(1024, 3, activation='relu', padding='same', kernel_initializer='he_normal')(conv5)
+    conv5 = klayer.Conv2D(1024, 3, activation=main_activation, padding='same', kernel_initializer='he_normal')(pool4)
+    conv5 = klayer.Conv2D(1024, 3, activation=main_activation, padding='same', kernel_initializer='he_normal')(conv5)
     drop5 = klayer.Dropout(0.5)(conv5)
 
-    up6 = klayer.Conv2D(512, 2, activation='relu', padding='same', kernel_initializer='he_normal')(
+    up6 = klayer.Conv2D(512, 2, activation=main_activation, padding='same', kernel_initializer='he_normal')(
         klayer.UpSampling2D(size=(2, 2))(drop5))
     merge6 = klayer.concatenate([drop4, up6], axis=3)
-    conv6 = klayer.Conv2D(512, 3, activation='relu', padding='same', kernel_initializer='he_normal')(merge6)
-    conv6 = klayer.Conv2D(512, 3, activation='relu', padding='same', kernel_initializer='he_normal')(conv6)
+    conv6 = klayer.Conv2D(512, 3, activation=main_activation, padding='same', kernel_initializer='he_normal')(merge6)
+    conv6 = klayer.Conv2D(512, 3, activation=main_activation, padding='same', kernel_initializer='he_normal')(conv6)
 
-    up7 = klayer.Conv2D(256, 2, activation='relu', padding='same', kernel_initializer='he_normal')(
+    up7 = klayer.Conv2D(256, 2, activation=main_activation, padding='same', kernel_initializer='he_normal')(
         klayer.UpSampling2D(size=(2, 2))(conv6))
     merge7 = klayer.concatenate([conv3, up7], axis=3)
-    conv7 = klayer.Conv2D(256, 3, activation='relu', padding='same', kernel_initializer='he_normal')(merge7)
-    conv7 = klayer.Conv2D(256, 3, activation='relu', padding='same', kernel_initializer='he_normal')(conv7)
+    conv7 = klayer.Conv2D(256, 3, activation=main_activation, padding='same', kernel_initializer='he_normal')(merge7)
+    conv7 = klayer.Conv2D(256, 3, activation=main_activation, padding='same', kernel_initializer='he_normal')(conv7)
 
-    up8 = klayer.Conv2D(128, 2, activation='relu', padding='same', kernel_initializer='he_normal')(
+    up8 = klayer.Conv2D(128, 2, activation=main_activation, padding='same', kernel_initializer='he_normal')(
         klayer.UpSampling2D(size=(2, 2))(conv7))
     merge8 = klayer.concatenate([conv2, up8], axis=3)
-    conv8 = klayer.Conv2D(128, 3, activation='relu', padding='same', kernel_initializer='he_normal')(merge8)
-    conv8 = klayer.Conv2D(128, 3, activation='relu', padding='same', kernel_initializer='he_normal')(conv8)
+    conv8 = klayer.Conv2D(128, 3, activation=main_activation, padding='same', kernel_initializer='he_normal')(merge8)
+    conv8 = klayer.Conv2D(128, 3, activation=main_activation, padding='same', kernel_initializer='he_normal')(conv8)
 
-    up9 = klayer.Conv2D(64, 2, activation='relu', padding='same', kernel_initializer='he_normal')(
+    up9 = klayer.Conv2D(64, 2, activation=main_activation, padding='same', kernel_initializer='he_normal')(
         klayer.UpSampling2D(size=(2, 2))(conv8))
     merge9 = klayer.concatenate([conv1, up9], axis=3)
-    conv9 = klayer.Conv2D(64, 3, activation='relu', padding='same', kernel_initializer='he_normal')(merge9)
-    conv9 = klayer.Conv2D(64, 3, activation='relu', padding='same', kernel_initializer='he_normal')(conv9)
-    conv9 = klayer.Conv2D(2, 3, activation='relu', padding='same', kernel_initializer='he_normal')(conv9)
+    conv9 = klayer.Conv2D(64, 3, activation=main_activation, padding='same', kernel_initializer='he_normal')(merge9)
+    conv9 = klayer.Conv2D(64, 3, activation=main_activation, padding='same', kernel_initializer='he_normal')(conv9)
+    conv9 = klayer.Conv2D(2, 3, activation=main_activation, padding='same', kernel_initializer='he_normal')(conv9)
     conv10 = klayer.Conv2D(1, 1, activation='sigmoid')(conv9)
 
-    model = tf.keras.Model(inputs=inputs, outputs=klayer.UpSampling2D(size=(down_sampling, down_sampling))(conv10))
+    layers = [inputs, conv1, conv2, conv3, conv4, conv5, conv6, conv7, conv8, conv9, conv10]
+
+    model = tf.keras.Model(inputs=inputs, outputs=klayer.UpSampling2D(size=(down_sampling, down_sampling))(layers[out_layer]))
 
     model.compile(optimizer=keras.optimizers.SGD(lr=learning_rate), loss=jaccard, metrics=["accuracy"])
 
@@ -529,12 +531,12 @@ if __name__ == "__main__":
     # Network and training params
     n_epochs = 1
     batch_size = 1
-    img_downsampling = 4
+    img_downsampling = 16
     learning_rate = 1e-2
-    num_train_examples = 20
+    num_train_examples = 10
     use_validation = False
     validation_coeff = 0.1
-    retrain = True
+    retrain = False
     net_arch = "unet"
 
     # The file in which trained weights are going to be stored
@@ -588,17 +590,33 @@ if __name__ == "__main__":
 
     for to_predict in train_filepaths:
         x, y = train_generator.load_filepath(to_predict)
-        pred = model.predict(np.asarray([x]))[0]
 
-        fig = plt.figure(figsize=(2, 2))
-        fig.add_subplot(2, 2, 1)
-        plt.imshow(pred.reshape((1024, 1024)), vmin=0, vmax=1)
-        plt.colorbar()
-        fig.add_subplot(2, 2, 2)
-        plt.imshow(x.reshape((1024, 1024)).astype(np.float64), vmin=-1, vmax=1)
-        plt.colorbar()
-        fig.add_subplot(2, 2, 3)
-        plt.imshow(y.reshape((1024, 1024)), vmin=0, vmax=1)
-        plt.colorbar()
-        plt.show()
+        images_per_row = 16
+        layers_to_vis = [1, 2, 3]
+        for layer_inx in layers_to_vis:
+            get_hidden_layer_model = locals()[net_arch] \
+                (down_sampling=img_downsampling, learning_rate=learning_rate, out_layer=layer_inx)
+            pred = get_hidden_layer_model.predict(np.asarray([x]))[0]
+            # Displays the feature maps
+            n_features = pred.shape[-1]  # Number of features in the feature map
+            size = pred.shape[0]  # The feature map has shape (1, size, size, n_features).
+            n_cols = n_features // images_per_row  # Tiles the activation channels in this matrix
+            display_grid = np.zeros((size * n_cols, images_per_row * size))
+            for col in range(n_cols):  # Tiles each filter into a big horizontal grid
+                for row in range(images_per_row):
+                    channel_image = pred[:, :, col * images_per_row + row]
+                    #channel_image -= channel_image.mean()  # Post-processes the feature to make it visually palatable
+                    #channel_image /= channel_image.std()
+                    #channel_image *= 64
+                    #channel_image += 128
+                    #channel_image = np.clip(channel_image, 0, 255).astype('uint8')
+                    display_grid[col * size: (col + 1) * size,  # Displays the grid
+                    row * size: (row + 1) * size] = channel_image
+            scale = 1. / size
+            plt.figure(figsize=(scale * display_grid.shape[1],
+                                scale * display_grid.shape[0]))
+            plt.grid(False)
+            plt.title("Layer nr. " + str(layer_inx+1))
+            plt.imshow(display_grid, aspect='auto', cmap='bone')
+            plt.show()
 
