@@ -436,7 +436,7 @@ def preprocess_mask(mask: np.ndarray):
     return mask
 
 
-tensorboard = TensorBoard(log_dir=config["logdir"], histogram_freq=1, write_graph=True, write_images=True)
+tensorboard = TensorBoard(log_dir=config["logdir"], histogram_freq=1, write_graph=True, write_images=True, write_grads=True)
 
 if __name__ == "__main__":
 
@@ -530,7 +530,7 @@ if __name__ == "__main__":
     img_downsampling = 4
     learning_rate = 1e-2
     num_train_examples = 1000
-    retrain = True
+    retrain = False
     net_arch = "unet"
 
     # The file in which trained weights are going to be stored
@@ -558,7 +558,10 @@ if __name__ == "__main__":
 
         train_generator = DataLoader(train_filepaths[:num_train_examples], batch_size=batch_size, mask_dir=os.path.join(data_dir, "train_png", "masks"))
         print("Fitting")
-        model.fit_generator(train_generator, epochs=n_epochs, use_multiprocessing=True, callbacks=[tensorboard])
+        try:
+            model.fit_generator(train_generator, epochs=n_epochs, use_multiprocessing=True, callbacks=[tensorboard])
+        except KeyboardInterrupt:
+            pass
         print("Saving model weights in", os.path.join(data_dir, "models", net_filename))
         model.save_weights(os.path.join(data_dir, "models", net_filename))
         print("Done saving model!")

@@ -1,2 +1,3 @@
-{"data_dir": "/home/hugo_dev/progs/rays-2019/rays-2019-teamwork/kaggle_project/data/", 
-"mask_csv_filename": "/home/hugo_dev/progs/rays-2019/rays-2019-teamwork/kaggle_project/data/train-rle.csv"}
+{"data_dir": "D:\\data\\", 
+"mask_csv_filename": "D:\\data\\Bok1.csv",
+"logdir": "C:\\rays-2019-teamwork\\kaggle_project\\logdir"}
