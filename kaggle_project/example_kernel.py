@@ -256,7 +256,7 @@ def transition_layer(x, nb_channels, dropout_rate=None, compression=1.0, weight_
     return x
 
 
-data_dir = os.getcwd() + os.sep + "data" + os.sep
+data_dir = "D:\\data\\"
 
 
 class DataLoader(keras.utils.Sequence):
@@ -269,8 +269,8 @@ class DataLoader(keras.utils.Sequence):
         self.indices = np.arange((len(self.filepaths)))
         self.shuffle = shuffle
         self.on_epoch_end()
-        self.csv = pd.read_csv(os.path.join(data_dir, "train-rle.csv"), header=None, index_col=0)
-        with open(os.path.join(data_dir, "train-rle.csv"), mode="r") as f:
+        self.csv = pd.read_csv(os.path.join(data_dir, "Bok1.csv"), header=None, index_col=0)
+        with open(os.path.join(data_dir, "Bok1.csv"), mode="r") as f:
             raw_rle = f.read()
 
         self.rles = {}
@@ -302,7 +302,7 @@ class DataLoader(keras.utils.Sequence):
         a = np.asarray(Image.open(filepath[:-4]+".png"))
         a = preprocess_image(a)
         X = np.expand_dims(a, axis=2)
-        Y = np.load(os.path.join(self.mask_dir, filepath.split(os.sep)[-1])[:-4]).T
+        Y = np.load(os.path.join(self.mask_dir, filepath.split(os.sep)[-1])[:-4])#.T
         #y_rle = self.rles[filepath.split(os.sep)[-1][:-4]]
         #Y = rle2mask(y_rle, *self.dim).T
         Y = np.reshape(Y, self.dim)
@@ -442,7 +442,8 @@ if __name__ == "__main__":
         print("Loaded data from old list of valid data files")
     except FileNotFoundError:
         print("Re-checking which data files are valid")
-        rle_data = pd.read_csv(os.path.join(data_dir, "train-rle.csv"), header=None, index_col=0)
+        print(os.path.join(data_dir, "Bok1.csv"))
+        rle_data = pd.read_csv(os.path.join(data_dir, "Bok1.csv"), header=None, index_col=0)
         valid_train_filepaths = [file_path[:-4]+".npy" for file_path in
                                  glob(os.path.join(train_data_pref, "*.png"), recursive=True)
                                  if check_valid_datafile(file_path, rle_data)]
@@ -476,7 +477,7 @@ if __name__ == "__main__":
         with open(data_dir + "valid_test_filepaths", mode="w") as f:
             f.write("\n".join(valid_test_filepaths))
 
-    with open(os.path.join(data_dir, "train-rle.csv"), mode="r") as f:
+    with open(os.path.join(data_dir, "Bok1.csv"), mode="r") as f:
         raw_rle = f.read()
 
     def check_store_mask_file(raw_csv_data):
@@ -545,7 +546,7 @@ if __name__ == "__main__":
         for to_predict in valid_train_filepaths:
             x, y = train_generator.load_filepath(to_predict)
             pred = model.predict(np.asarray([x]))[0]
-            '''
+            
             fig = plt.figure(figsize=(2, 2))
             fig.add_subplot(2, 2, 1)
             plt.imshow(pred.reshape((1024, 1024)), vmin=0, vmax=1)
@@ -554,4 +555,4 @@ if __name__ == "__main__":
             fig.add_subplot(2, 2, 3)
             plt.imshow(y.reshape((1024, 1024)), vmin=0, vmax=1)
             plt.show()
-            '''
+            
