@@ -21,6 +21,13 @@ from keras.models import Model
 from keras.layers import Conv2D, GlobalAveragePooling2D, AveragePooling2D
 from keras.regularizers import l2
 
+import json
+with open(os.path.join(os.getcwd(), "config.json"), mode="r") as f:
+    config = json.load(f)
+
+data_dir = config["data_dir"]
+mask_csv_filename = config["config_csv_filename"]
+
 
 def unet(learning_rate, pretrained_weights=None, input_size=(1024, 1024, 1), down_sampling=4):
     """Almost directly taken from https://github.com/zhixuhao/unet. Modified to fit into memory"""
@@ -424,8 +431,8 @@ def preprocess_image(image_array: np.ndarray):
 
 
 def preprocess_mask(mask: np.ndarray):
-    mask = mask-128
-    mask = mask/128
+    #mask = mask-128
+    #mask = mask/128
     return mask
 
 
@@ -487,8 +494,11 @@ if __name__ == "__main__":
                 pass
         except FileNotFoundError:
             rle_d = [x for x in rle_d.split() if x != ""]
-            mask = rle2mask(rle_d, 1024, 1024).astype(np.uint8).T
+            mask = rle2mask(rle_d, 1024, 1024).astype(np.bool)
             mask = preprocess_mask(mask)
+            mask = mask.reshape((1024, 1024)).T
+            #plt.imshow(mask)
+            #plt.show()
             with open(os.path.join(data_dir, "train_png", "masks", key), mode="wb") as f:
                 np.save(f, mask)
 
