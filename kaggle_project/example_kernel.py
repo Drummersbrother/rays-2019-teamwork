@@ -21,13 +21,14 @@ from keras.models import Model
 from keras.layers import Conv2D, GlobalAveragePooling2D, AveragePooling2D
 from keras.regularizers import l2
 
+from keras_contrib.losses.jaccard import jaccard_distance as jaccard
+
 import json
 with open(os.path.join(os.getcwd(), "config.json"), mode="r") as f:
     config = json.load(f)
 
 data_dir = config["data_dir"]
 mask_csv_filename = config["mask_csv_filename"]
-
 
 def unet(learning_rate, pretrained_weights=None, input_size=(1024, 1024, 1), down_sampling=4):
     """Almost directly taken from https://github.com/zhixuhao/unet. Modified to fit into memory"""
@@ -80,7 +81,7 @@ def unet(learning_rate, pretrained_weights=None, input_size=(1024, 1024, 1), dow
 
     model = tf.keras.Model(inputs=inputs, outputs=klayer.UpSampling2D(size=(down_sampling, down_sampling))(conv10))
 
-    model.compile(optimizer=keras.optimizers.Adam(lr=learning_rate), loss=keras.losses.MSE, metrics=["accuracy"])
+    model.compile(optimizer=keras.optimizers.Adam(lr=learning_rate), loss=jaccard, metrics=["accuracy"])
 
     # model.summary()
 
@@ -95,11 +96,13 @@ def smet(learning_rate, pretrained_weights=None, input_size=(1024, 1024, 1), dow
     inputs = klayer.Input(input_size)
     # Rescale to not take too much memory
     scaled_inputs = klayer.MaxPooling2D(pool_size=(down_sampling, down_sampling))(inputs)
-    conv1 = klayer.Conv2D(4, 5, activation='tanh', padding='same', kernel_initializer='he_normal')(scaled_inputs)
-    conv1 = klayer.Conv2D(1, 5, activation='sigmoid', padding='same', kernel_initializer='he_normal')(conv1)
+    conv1 = klayer.Conv2D(64, 5, activation='sigmoid', use_bias=True, padding='same', kernel_initializer='he_normal')(scaled_inputs)
+    conv1 = klayer.Conv2D(1, 5, activation='sigmoid', use_bias=True, padding='same', kernel_initializer='he_normal')(conv1)
+    conv3 = klayer.Conv2D(64, 5, activation='sigmoid', use_bias=True, padding='same', kernel_initializer='he_normal')(conv1)
+    conv3 = klayer.Conv2D(1, 10, activation="sigmoid", use_bias=True, padding='same', kernel_initializer='he_normal')(conv3)
     model = tf.keras.Model(inputs=inputs, outputs=klayer.UpSampling2D(size=(down_sampling, down_sampling))(conv1))
 
-    model.compile(optimizer=keras.optimizers.Adam(lr=learning_rate), loss=keras.losses.binary_crossentropy, metrics=["accuracy"])
+    model.compile(optimizer=keras.optimizers.Adam(lr=learning_rate), loss=jaccard, metrics=["accuracy"])
 
     # model.summary()
     #all_layers_output = keras.backend.function([model.layers[0].input],
@@ -522,36 +525,54 @@ if __name__ == "__main__":
     print("Setup done!")
 
     # Network and training params
-    n_epochs = 1
-    batch_size = 1
+    n_epochs = 100
+    batch_size = 10
     img_downsampling = 4
     learning_rate = 1e-2
-    num_train_examples = 100
+    num_train_examples = 1000
+    retrain = True
     net_arch = "unet"
 
     # The file in which trained weights are going to be stored
     net_filename = f"{net_arch}-epochs_{n_epochs}-batchsz_{batch_size}-lr_{learning_rate}-downsampling_{img_downsampling}-numexamples_{num_train_examples}"
 
-    if not os.path.exists(os.path.join(data_dir, "models", net_filename)):
+
+    with open(mask_csv_filename, mode="r") as f:
+            raw_rle = f.read()
+    raw_csv_data = raw_rle.split("\n")
+    haspneumo_lookup = {}
+    for line in raw_csv_data:
+        key,rle = line.split(",")
+        haspneumo_lookup[key] = False if rle.strip() == "-1" else True
+    
+    pneumo_filepaths = []
+    for path in valid_train_filepaths:
+        if haspneumo_lookup[os.path.split(path)[1][:-4]]:
+            pneumo_filepaths.append(path)
+
+    train_filepaths = pneumo_filepaths
+    model = locals()[net_arch](down_sampling=img_downsampling, learning_rate=learning_rate)
+
+    if retrain or not os.path.exists(os.path.join(data_dir, "models", net_filename)):
         print("Training network!")
-        train_generator = DataLoader(valid_train_filepaths[:num_train_examples], batch_size=batch_size, mask_dir=os.path.join(data_dir, "train_png", "masks"))
-        model = locals()[net_arch](down_sampling=img_downsampling, learning_rate=learning_rate)
+
+        train_generator = DataLoader(train_filepaths[:num_train_examples], batch_size=batch_size, mask_dir=os.path.join(data_dir, "train_png", "masks"))
         print("Fitting")
         model.fit_generator(train_generator, epochs=n_epochs, use_multiprocessing=True, callbacks=[tensorboard])
-        print("Saving model in", os.path.join(data_dir, "models", net_filename))
-        model.save(os.path.join(data_dir, "models", net_filename))
+        print("Saving model weights in", os.path.join(data_dir, "models", net_filename))
+        model.save_weights(os.path.join(data_dir, "models", net_filename))
         print("Done saving model!")
     else:
         print("Not training network!")
         try:
-            print("Loading pretrained network")
-            model = keras.models.load_model(os.path.join(data_dir + "models", net_filename))
+            print("Loading pretrained network weights")
+            model.load_weights(os.path.join(data_dir + "models", net_filename))
         except:
             print("Was not able to load model...")
             raise
 
-        train_generator = DataLoader(valid_train_filepaths, batch_size=batch_size, mask_dir=os.path.join(data_dir, "train_png", "masks"))
-        for to_predict in valid_train_filepaths:
+        train_generator = DataLoader(train_filepaths, batch_size=batch_size, mask_dir=os.path.join(data_dir, "train_png", "masks"))
+        for to_predict in train_filepaths:
             x, y = train_generator.load_filepath(to_predict)
             pred = model.predict(np.asarray([x]))[0]
             
