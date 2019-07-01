@@ -553,7 +553,7 @@ if __name__ == "__main__":
     use_filepaths = pneumo_filepaths
     num_validation_examples = int(num_train_examples * validation_coeff)
     train_filepaths = use_filepaths[:-int(validation_coeff*len(use_filepaths))][:num_train_examples]
-    validation_filepaths = use_filepaths[-int(validation_coeff*len(use_filepaths):][:num_validation_examples]
+    validation_filepaths = use_filepaths[-int(validation_coeff*len(use_filepaths)):][:num_validation_examples]
     model = locals()[net_arch](down_sampling=img_downsampling, learning_rate=learning_rate)
 
     if retrain or not os.path.exists(os.path.join(data_dir, "models", net_filename)):
