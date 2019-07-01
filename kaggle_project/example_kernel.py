@@ -276,8 +276,8 @@ class DataLoader(keras.utils.Sequence):
         self.indices = np.arange((len(self.filepaths)))
         self.shuffle = shuffle
         self.on_epoch_end()
-        self.csv = pd.read_csv(os.path.join(data_dir, "Bok1.csv"), header=None, index_col=0)
-        with open(os.path.join(data_dir, "Bok1.csv"), mode="r") as f:
+        self.csv = pd.read_csv(mask_csv_filename, header=None, index_col=0)
+        with open(mask_csv_filename, mode="r") as f:
             raw_rle = f.read()
 
         self.rles = {}
@@ -449,8 +449,8 @@ if __name__ == "__main__":
         print("Loaded data from old list of valid data files")
     except FileNotFoundError:
         print("Re-checking which data files are valid")
-        print(os.path.join(data_dir, "Bok1.csv"))
-        rle_data = pd.read_csv(os.path.join(data_dir, "Bok1.csv"), header=None, index_col=0)
+        print(os.path.join(mask_csv_filename)
+        rle_data = pd.read_csv(mask_csv_filename, header=None, index_col=0)
         valid_train_filepaths = [file_path[:-4]+".npy" for file_path in
                                  glob(os.path.join(train_data_pref, "*.png"), recursive=True)
                                  if check_valid_datafile(file_path, rle_data)]
@@ -484,7 +484,7 @@ if __name__ == "__main__":
         with open(data_dir + "valid_test_filepaths", mode="w") as f:
             f.write("\n".join(valid_test_filepaths))
 
-    with open(os.path.join(data_dir, "Bok1.csv"), mode="r") as f:
+    with open(mask_csv_filename, mode="r") as f:
         raw_rle = f.read()
 
     def check_store_mask_file(raw_csv_data):
