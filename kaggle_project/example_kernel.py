@@ -26,7 +26,7 @@ with open(os.path.join(os.getcwd(), "config.json"), mode="r") as f:
     config = json.load(f)
 
 data_dir = config["data_dir"]
-mask_csv_filename = config["config_csv_filename"]
+mask_csv_filename = config["mask_csv_filename"]
 
 
 def unet(learning_rate, pretrained_weights=None, input_size=(1024, 1024, 1), down_sampling=4):
@@ -263,9 +263,6 @@ def transition_layer(x, nb_channels, dropout_rate=None, compression=1.0, weight_
     return x
 
 
-data_dir = "D:\\data\\"
-
-
 class DataLoader(keras.utils.Sequence):
     def __init__(self, filepaths, batch_size=32, dim=(1024, 1024), shuffle=True, mask_dir=""):
         """Initialization"""
@@ -449,7 +446,7 @@ if __name__ == "__main__":
         print("Loaded data from old list of valid data files")
     except FileNotFoundError:
         print("Re-checking which data files are valid")
-        print(os.path.join(mask_csv_filename)
+        print(os.path.join(mask_csv_filename))
         rle_data = pd.read_csv(mask_csv_filename, header=None, index_col=0)
         valid_train_filepaths = [file_path[:-4]+".npy" for file_path in
                                  glob(os.path.join(train_data_pref, "*.png"), recursive=True)
