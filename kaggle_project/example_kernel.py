@@ -29,8 +29,8 @@ class DataLoader(keras.utils.Sequence):
         self.indices = np.arange((len(self.filepaths)))
         self.shuffle = shuffle
         self.on_epoch_end()
-        self.csv = pd.read_csv(os.path.join(data_dir, "train-rle.csv"), header=None, index_col=0)
-        with open(os.path.join(data_dir, "train-rle.csv"), mode="r") as f:
+        self.csv = pd.read_csv(os.path.join(data_dir, "bok1.csv"), header=None, index_col=0)
+        with open(os.path.join(data_dir, "bok1.csv"), mode="r") as f:
             raw_rle = f.read()
 
         self.rles = {}
@@ -143,15 +143,15 @@ def rle2mask(rle, width, height):
     array = np.asarray(array_data)
     starts = array[0::2]
     lengths = array[1::2]
-    if len(starts) > len(lengths):
+
+    if len(starts) >len(lengths):
         starts = starts[:len(lengths)]
 
     current_position = 0
     for index, start in enumerate(starts):
         current_position += start
-        mask[current_position:min(current_position + lengths[index], (width * height) - 1)] = 255
+        mask[current_position:current_position + lengths[index]] = 1
         current_position += lengths[index]
-
     return mask.reshape(width, height)
 
 
@@ -246,10 +246,10 @@ def smet(learning_rate, pretrained_weights=None, input_size=(1024, 1024, 1), dow
     # Rescale to not take too much memory
     scaled_inputs = klayer.MaxPooling2D(pool_size=(down_sampling, down_sampling))(inputs)
     conv1 = klayer.Conv2D(64, 5, activation='tanh', padding='same', kernel_initializer='he_normal')(scaled_inputs)
-    conv1 = klayer.Conv2D(1, 5, activation='tanh', padding='same', kernel_initializer='he_normal')(conv1)
+    conv1 = klayer.Conv2D(1, 5, activation='sigmoid', padding='same', kernel_initializer='he_normal')(conv1)
     model = tf.keras.Model(inputs=inputs, outputs=klayer.UpSampling2D(size=(down_sampling, down_sampling))(conv1))
 
-    model.compile(optimizer=keras.optimizers.Adam(lr=learning_rate), loss=keras.losses.MSE, metrics=["accuracy"])
+    model.compile(optimizer=keras.optimizers.Adam(lr=learning_rate), loss=keras.losses.binary_crossentropy, metrics=["accuracy"])
 
     # model.summary()
 
@@ -265,8 +265,7 @@ def preprocess_image(image_array: np.ndarray):
 
 
 def preprocess_mask(mask: np.ndarray):
-    mask = mask-128
-    mask = mask/128
+    #mask = (mask.astype(np.float16) - 255) / 128
     return mask
 
 
@@ -283,7 +282,7 @@ if __name__ == "__main__":
         print("Loaded data from old list of valid data files")
     except FileNotFoundError:
         print("Re-checking which data files are valid")
-        rle_data = pd.read_csv(os.path.join(data_dir, "train-rle.csv"), header=None, index_col=0)
+        rle_data = pd.read_csv(os.path.join(data_dir, "bok1.csv"), header=None, index_col=0)
         valid_train_filepaths = [file_path[:-4]+".npy" for file_path in
                                  glob(os.path.join(train_data_pref, "*.png"), recursive=True)
                                  if check_valid_datafile(file_path, rle_data)]
@@ -317,19 +316,22 @@ if __name__ == "__main__":
         with open(data_dir + "valid_test_filepaths", mode="w") as f:
             f.write("\n".join(valid_test_filepaths))
 
-    with open(os.path.join(data_dir, "train-rle.csv"), mode="r") as f:
+    with open(os.path.join(data_dir, "bok1.csv"), mode="r") as f:
         raw_rle = f.read()
 
     def check_store_mask_file(raw_csv_data):
         key, rle_d = raw_csv_data.split(",")
         try:
+            raise FileNotFoundError()
             with open(os.path.join(data_dir, "train_png", "masks", key), mode="r") as f:
                 pass
         except FileNotFoundError:
             rle_d = [x for x in rle_d.split() if x != ""]
-            mask = rle2mask(rle_d, 1024, 1024).astype(np.bool)
-            plt.imshow(mask)
-            plt.show()
+            mask = rle2mask(rle_d, 1024, 1024).astype(np.uint8)
+            mask = np.reshape(mask, (1024, 1024)).T
+            mask = np.expand_dims(mask, axis=2)
+            mask = preprocess_mask(mask)
+            
             #mask = preprocess_mask(mask)
             with open(os.path.join(data_dir, "train_png", "masks", key), mode="wb") as f:
                 np.save(f, mask)
@@ -384,6 +386,8 @@ if __name__ == "__main__":
 
         train_generator = DataLoader(valid_train_filepaths, batch_size=batch_size, mask_dir=os.path.join(data_dir, "train_png", "masks"))
         for to_predict in valid_train_filepaths:
+            #if os.path.split(to_predict)[1][:-4] not in [os.path.split(x)[1] for x in valid_mask_paths]:
+            #    continue
             x, y = train_generator.load_filepath(to_predict)
             pred = model.predict(np.asarray([x]))[0]
             fig = plt.figure(figsize=(2, 2))
