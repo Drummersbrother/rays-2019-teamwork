@@ -433,7 +433,7 @@ def preprocess_mask(mask: np.ndarray):
     return mask
 
 
-tensorboard = TensorBoard(log_dir='C:\\rays-2019-teamwork\\kaggle_project\\logdir', histogram_freq=1, write_graph=True, write_images=True)
+tensorboard = TensorBoard(log_dir=config["logdir"], histogram_freq=1, write_graph=True, write_images=True)
 
 if __name__ == "__main__":
 
@@ -523,17 +523,18 @@ if __name__ == "__main__":
 
     # Network and training params
     n_epochs = 1
-    batch_size = 10
-    img_downsampling = 16
+    batch_size = 1
+    img_downsampling = 4
     learning_rate = 1e-2
-    net_arch = "smet"
+    num_train_examples = 100
+    net_arch = "unet"
 
     # The file in which trained weights are going to be stored
-    net_filename = f"{net_arch}-epochs_{n_epochs}-batchsz_{batch_size}-lr_{learning_rate}-downsampling_{img_downsampling}"
+    net_filename = f"{net_arch}-epochs_{n_epochs}-batchsz_{batch_size}-lr_{learning_rate}-downsampling_{img_downsampling}-numexamples_{num_train_examples}"
 
     if not os.path.exists(os.path.join(data_dir, "models", net_filename)):
         print("Training network!")
-        train_generator = DataLoader(valid_train_filepaths[:100], batch_size=batch_size, mask_dir=os.path.join(data_dir, "train_png", "masks"))
+        train_generator = DataLoader(valid_train_filepaths[:num_train_examples], batch_size=batch_size, mask_dir=os.path.join(data_dir, "train_png", "masks"))
         model = locals()[net_arch](down_sampling=img_downsampling, learning_rate=learning_rate)
         print("Fitting")
         model.fit_generator(train_generator, epochs=n_epochs, use_multiprocessing=True, callbacks=[tensorboard])
@@ -562,4 +563,4 @@ if __name__ == "__main__":
             fig.add_subplot(2, 2, 3)
             plt.imshow(y.reshape((1024, 1024)), vmin=0, vmax=1)
             plt.show()
-            
+
