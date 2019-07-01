@@ -370,3 +370,4 @@ dmypy.json
 
 kaggle_project/data
 kaggle_project/zips
+kaggle_project/config.json
