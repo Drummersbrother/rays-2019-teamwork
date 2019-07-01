@@ -3,15 +3,11 @@ import numpy as np
 from PIL import Image
 import pandas as pd
 from tensorflow import keras
-from matplotlib import pyplot as plt, use
+from matplotlib import pyplot as plt
 from multiprocessing import Pool, cpu_count
-import matplotlib as mpl
-from skimage.color import label2rgb
-import time
 
 import os
 from glob import glob
-from matplotlib import cm
 
 import tensorflow.keras.layers as klayer
 
@@ -28,6 +24,13 @@ with open(os.path.join(os.getcwd(), "config.json"), mode="r") as f:
 
 data_dir = config["data_dir"]
 mask_csv_filename = config["mask_csv_filename"]
+
+def mod_jaccard(y_true, y_pred, smooth=100):
+    K = keras.backend
+    intersection = K.sum(K.abs(y_true * y_pred), axis=-1)
+    sum_ = K.sum(K.abs(y_true) + K.abs(y_pred), axis=-1)
+    jac = (intersection + smooth) / (sum_ - intersection + smooth)
+    return (1 - jac) * smooth
 
 def unet(learning_rate, pretrained_weights=None, input_size=(1024, 1024, 1), down_sampling=4):
     """Almost directly taken from https://github.com/zhixuhao/unet. Modified to fit into memory"""
@@ -80,7 +83,7 @@ def unet(learning_rate, pretrained_weights=None, input_size=(1024, 1024, 1), dow
 
     model = tf.keras.Model(inputs=inputs, outputs=klayer.UpSampling2D(size=(down_sampling, down_sampling))(conv10))
 
-    model.compile(optimizer=keras.optimizers.Adam(lr=learning_rate), loss=jaccard, metrics=["accuracy"])
+    model.compile(optimizer=keras.optimizers.SGD(lr=learning_rate), loss=jaccard, metrics=["accuracy"])
 
     # model.summary()
 
@@ -101,7 +104,7 @@ def smet(learning_rate, pretrained_weights=None, input_size=(1024, 1024, 1), dow
     conv3 = klayer.Conv2D(1, 10, activation="sigmoid", use_bias=True, padding='same', kernel_initializer='he_normal')(conv3)
     model = tf.keras.Model(inputs=inputs, outputs=klayer.UpSampling2D(size=(down_sampling, down_sampling))(conv1))
 
-    model.compile(optimizer=keras.optimizers.Adam(lr=learning_rate), loss=jaccard, metrics=["accuracy"])
+    model.compile(optimizer=keras.optimizers.SGD(lr=learning_rate), loss=jaccard, metrics=["accuracy"])
 
     # model.summary()
     #all_layers_output = keras.backend.function([model.layers[0].input],
@@ -524,14 +527,15 @@ if __name__ == "__main__":
     print("Setup done!")
 
     # Network and training params
-    n_epochs = 10
+    n_epochs = 1
     batch_size = 1
     img_downsampling = 4
     learning_rate = 1e-2
     num_train_examples = 20
-    validation_coeff = 0.5
+    use_validation = False
+    validation_coeff = 0.1
     retrain = True
-    net_arch = "umet"
+    net_arch = "unet"
 
     # The file in which trained weights are going to be stored
     net_filename = f"{net_arch}-epochs_{n_epochs}-batchsz_{batch_size}-lr_{learning_rate}-downsampling_{img_downsampling}-numexamples_{num_train_examples}"
@@ -552,40 +556,49 @@ if __name__ == "__main__":
 
     use_filepaths = pneumo_filepaths
     num_validation_examples = int(num_train_examples * validation_coeff)
-    train_filepaths = use_filepaths[:-int(validation_coeff*len(use_filepaths))][:num_train_examples]
-    validation_filepaths = use_filepaths[-int(validation_coeff*len(use())):][:num_validation_examples]
+    train_filepaths = use_filepaths[:-int(validation_coeff*len(use_filepaths)) if use_validation else len(use_filepaths)][:num_train_examples]
+    validation_filepaths = use_filepaths[-int(validation_coeff*len(use_filepaths)):][:num_validation_examples]
     model = locals()[net_arch](down_sampling=img_downsampling, learning_rate=learning_rate)
 
-    if retrain or not os.path.exists(os.path.join(data_dir, "models", net_filename)):
+    try:
+        if retrain:
+            raise Exception
+        print("Loading pretrained network weights")
+        model.load_weights(os.path.join(data_dir + "models", net_filename))
+    except:
+        print("Was not able to load model...")
         print("Training network!")
 
-        train_generator = DataLoader(train_filepaths, batch_size=batch_size, mask_dir=os.path.join(data_dir, "train_png", "masks"))
-        validation_generator = DataLoader(validation_filepaths, batch_size=batch_size, mask_dir=os.path.join(data_dir, "train_png", "masks"))
+        train_generator = DataLoader(train_filepaths, batch_size=batch_size,
+                                     mask_dir=os.path.join(data_dir, "train_png", "masks"))
+        if use_validation:
+            validation_generator = DataLoader(validation_filepaths, batch_size=batch_size,
+                                          mask_dir=os.path.join(data_dir, "train_png", "masks"))
         print("Fitting")
-        model.fit_generator(train_generator, validation_data=validation_generator, validation_freq=1, epochs=n_epochs, use_multiprocessing=True, callbacks=[tensorboard])
-        print("Saving model weights in", os.path.join(data_dir, "models", net_filename))
-        model.save_weights(os.path.join(data_dir, "models", net_filename))
-        print("Done saving model!")
-    else:
-        print("Not training network!")
         try:
-            print("Loading pretrained network weights")
-            model.load_weights(os.path.join(data_dir + "models", net_filename))
-        except:
-            print("Was not able to load model...")
-            raise
+            model.fit_generator(train_generator, validation_data=validation_generator if use_validation else None,
+                                validation_freq=1 if use_validation else None,
+                                epochs=n_epochs, use_multiprocessing=True, callbacks=[tensorboard])
+        except KeyboardInterrupt:
+            print("Saving model weights in", os.path.join(data_dir, "models", net_filename))
+            model.save_weights(os.path.join(data_dir, "models", net_filename))
+            print("Done saving model!")
 
-        train_generator = DataLoader(train_filepaths, batch_size=batch_size, mask_dir=os.path.join(data_dir, "train_png", "masks"))
-        for to_predict in train_filepaths:
-            x, y = train_generator.load_filepath(to_predict)
-            pred = model.predict(np.asarray([x]))[0]
-            
-            fig = plt.figure(figsize=(8, 8))
-            fig.add_subplot(2, 2, 1)
-            plt.imshow(pred.reshape((1024, 1024)), vmin=0, vmax=1)
-            fig.add_subplot(2, 2, 2)
-            plt.imshow(x.reshape((1024, 1024)).astype(np.float64), vmin=-1, vmax=1)
-            fig.add_subplot(2, 2, 3)
-            plt.imshow(y.reshape((1024, 1024)), vmin=0, vmax=1)
-            plt.show()
+    train_generator = DataLoader(train_filepaths, batch_size=batch_size, mask_dir=os.path.join(data_dir, "train_png", "masks"))
+
+    for to_predict in train_filepaths:
+        x, y = train_generator.load_filepath(to_predict)
+        pred = model.predict(np.asarray([x]))[0]
+
+        fig = plt.figure(figsize=(2, 2))
+        fig.add_subplot(2, 2, 1)
+        plt.imshow(pred.reshape((1024, 1024)), vmin=0, vmax=1)
+        plt.colorbar()
+        fig.add_subplot(2, 2, 2)
+        plt.imshow(x.reshape((1024, 1024)).astype(np.float64), vmin=-1, vmax=1)
+        plt.colorbar()
+        fig.add_subplot(2, 2, 3)
+        plt.imshow(y.reshape((1024, 1024)), vmin=0, vmax=1)
+        plt.colorbar()
+        plt.show()
 
