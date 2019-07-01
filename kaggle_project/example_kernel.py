@@ -3,7 +3,7 @@ import numpy as np
 from PIL import Image
 import pandas as pd
 from tensorflow import keras
-from matplotlib import pyplot as plt
+from matplotlib import pyplot as plt, use
 from multiprocessing import Pool, cpu_count
 import matplotlib as mpl
 from skimage.color import label2rgb
@@ -14,7 +14,6 @@ from glob import glob
 from matplotlib import cm
 
 import tensorflow.keras.layers as klayer
-from tensorflow.keras.callbacks import TensorBoard
 
 from keras.layers import Input, Dense, Dropout, Activation, Concatenate, BatchNormalization
 from keras.models import Model
@@ -436,7 +435,7 @@ def preprocess_mask(mask: np.ndarray):
     return mask
 
 
-tensorboard = TensorBoard(log_dir=config["logdir"], histogram_freq=1, write_graph=True, write_images=True, write_grads=True)
+tensorboard = keras.callbacks.TensorBoard(log_dir=config["logdir"], histogram_freq=1, write_grads=True, write_graph=True, write_images=True)
 
 if __name__ == "__main__":
 
@@ -525,13 +524,14 @@ if __name__ == "__main__":
     print("Setup done!")
 
     # Network and training params
-    n_epochs = 100
-    batch_size = 10
+    n_epochs = 10
+    batch_size = 1
     img_downsampling = 4
     learning_rate = 1e-2
-    num_train_examples = 1000
-    retrain = False
-    net_arch = "unet"
+    num_train_examples = 20
+    validation_coeff = 0.5
+    retrain = True
+    net_arch = "umet"
 
     # The file in which trained weights are going to be stored
     net_filename = f"{net_arch}-epochs_{n_epochs}-batchsz_{batch_size}-lr_{learning_rate}-downsampling_{img_downsampling}-numexamples_{num_train_examples}"
@@ -550,18 +550,19 @@ if __name__ == "__main__":
         if haspneumo_lookup[os.path.split(path)[1][:-4]]:
             pneumo_filepaths.append(path)
 
-    train_filepaths = pneumo_filepaths
+    use_filepaths = pneumo_filepaths
+    num_validation_examples = int(num_train_examples * validation_coeff)
+    train_filepaths = use_filepaths[:-int(validation_coeff*len(use_filepaths))][:num_train_examples]
+    validation_filepaths = use_filepaths[-int(validation_coeff*len(use())):][:num_validation_examples]
     model = locals()[net_arch](down_sampling=img_downsampling, learning_rate=learning_rate)
 
     if retrain or not os.path.exists(os.path.join(data_dir, "models", net_filename)):
         print("Training network!")
 
-        train_generator = DataLoader(train_filepaths[:num_train_examples], batch_size=batch_size, mask_dir=os.path.join(data_dir, "train_png", "masks"))
+        train_generator = DataLoader(train_filepaths, batch_size=batch_size, mask_dir=os.path.join(data_dir, "train_png", "masks"))
+        validation_generator = DataLoader(validation_filepaths, batch_size=batch_size, mask_dir=os.path.join(data_dir, "train_png", "masks"))
         print("Fitting")
-        try:
-            model.fit_generator(train_generator, epochs=n_epochs, use_multiprocessing=True, callbacks=[tensorboard])
-        except KeyboardInterrupt:
-            pass
+        model.fit_generator(train_generator, validation_data=validation_generator, validation_freq=1, epochs=n_epochs, use_multiprocessing=True, callbacks=[tensorboard])
         print("Saving model weights in", os.path.join(data_dir, "models", net_filename))
         model.save_weights(os.path.join(data_dir, "models", net_filename))
         print("Done saving model!")
