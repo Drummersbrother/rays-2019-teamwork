@@ -351,6 +351,7 @@ if __name__ == "__main__":
         for to_predict in valid_train_filepaths:
             x, y = train_generator.load_filepath(to_predict)
             pred = model.predict(np.asarray([x]))[0]
+            '''
             fig = plt.figure(figsize=(2, 2))
             fig.add_subplot(2, 2, 1)
             plt.imshow(pred.reshape((1024, 1024)), vmin=0, vmax=1)
@@ -359,3 +360,4 @@ if __name__ == "__main__":
             fig.add_subplot(2, 2, 3)
             plt.imshow(y.reshape((1024, 1024)), vmin=0, vmax=1)
             plt.show()
+            '''
