@@ -531,11 +531,11 @@ if __name__ == "__main__":
     print("Setup done!")
 
     # Network and training params/config
-    n_epochs = 10
+    n_epochs = 1
     batch_size = 1
     img_downsampling = 16
     learning_rate = 1e-2
-    num_train_examples = 10
+    num_train_examples = 4
     use_validation = False
     validation_coeff = 0.1
     retrain = False
@@ -567,7 +567,7 @@ if __name__ == "__main__":
     try:
         if retrain:
             raise Exception
-        print("Loading pretrained network weights")
+        print("Loading pretrained network weights, from", os.path.join(data_dir + "models", net_filename))
         model.load_weights(os.path.join(data_dir + "models", net_filename))
     except Exception as e:
         print("Was not able to load model...")
@@ -592,12 +592,14 @@ if __name__ == "__main__":
     prediction_model = locals()[net_arch] \
         (down_sampling=img_downsampling, learning_rate=learning_rate, give_intermediate=True)
 
+    del model
     # Visualisation config
     images_per_row = 16
-    layers_to_vis = [2, 3, 4, 5, 6, 7, 8, 9]
+    layers_to_vis = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+    figure_suffix = ".png"
 
     import math
-    def plot_hidden_layer_activations(pred, layer_inx, imgs_per_row=None):
+    def plot_hidden_layer_activations(pred, layer_inx, imgs_per_row=None, filename=""):
         if not imgs_per_row:
             imgs_per_row = images_per_row
         # Displays the feature maps
@@ -624,7 +626,7 @@ if __name__ == "__main__":
         plt.grid(False)
         plt.title("Layer nr. " + str(layer_inx + 1))
         plt.imshow(display_grid, aspect='auto', cmap='bone')
-        plt.show()
+        plt.savefig(os.path.join(data_dir, "plots", "Layer_" + str(layer_inx+1) + "_" + filename + figure_suffix), bbox_inches="tight")
 
     for to_predict in train_filepaths:
         x, y = train_generator.load_filepath(to_predict)
@@ -633,8 +635,10 @@ if __name__ == "__main__":
         plt.grid(False)
         plt.title("Input")
         plt.imshow(x.squeeze().astype(np.float32), aspect='auto', cmap='bone')
-        plt.show()
+        plt.savefig(os.path.join(data_dir, "plots", "Input_" + os.path.split(to_predict)[1] + figure_suffix), bbox_inches="tight")
+        plt.close('all')
         for layer_inx in layers_to_vis:
             pred = pred_layers[layer_inx][0]
-            plot_hidden_layer_activations(pred, layer_inx)
+            plot_hidden_layer_activations(pred, layer_inx, filename=os.path.split(to_predict)[1])
+            plt.close('all')
 
