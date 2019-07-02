@@ -18,6 +18,10 @@ from keras.regularizers import l2
 
 from keras_contrib.losses.jaccard import jaccard_distance as jaccard
 
+from keras.callbacks import Callback
+
+from tensorboard.plugins.beholder import Beholder
+
 import json
 with open(os.path.join(os.getcwd(), "config.json"), mode="r") as f:
     config = json.load(f)
@@ -25,12 +29,32 @@ with open(os.path.join(os.getcwd(), "config.json"), mode="r") as f:
 data_dir = config["data_dir"]
 mask_csv_filename = config["mask_csv_filename"]
 
+
+class BeholderCallback(Callback):
+    def __init__(self, log_dir):
+        self.log_dir = log_dir
+        self.beholder = Beholder(log_dir)
+
+    def on_batch_end(self, batch, logs=None):
+        pass
+
+    def on_train_batch_begin(self, batch, logs=None, *args, **kwargs):
+        pass
+
+    def on_train_batch_end(self, batch, logs=None, *args, **kwargs):
+        print("Batch", batch, "has ended.")
+        K = keras.backend.backend
+        sess = keras.backend.get_session()
+        self.beholder.update(session=sess)
+
+
 def mod_jaccard(y_true, y_pred, smooth=100):
     K = keras.backend
     intersection = K.sum(K.abs(y_true * y_pred), axis=-1)
     sum_ = K.sum(K.abs(y_true) + K.abs(y_pred), axis=-1)
     jac = (intersection + smooth) / (sum_ - intersection + smooth)
     return (1 - jac) * smooth
+
 
 def unet(learning_rate, pretrained_weights=None, input_size=(1024, 1024, 1), down_sampling=4, give_intermediate=False, main_activation="relu"):
     """Almost directly taken from https://github.com/zhixuhao/unet. Modified to fit into memory"""
@@ -87,7 +111,7 @@ def unet(learning_rate, pretrained_weights=None, input_size=(1024, 1024, 1), dow
 
     model = tf.keras.Model(inputs=inputs, outputs=layers if give_intermediate else out_layer)
 
-    model.compile(optimizer=keras.optimizers.SGD(lr=learning_rate), loss=jaccard, metrics=["accuracy"])
+    model.compile(optimizer=keras.optimizers.Adam(lr=learning_rate), loss=jaccard, metrics=["accuracy"])
 
     # model.summary()
 
@@ -442,8 +466,6 @@ def preprocess_mask(mask: np.ndarray):
     return mask
 
 
-tensorboard = keras.callbacks.TensorBoard(log_dir=config["logdir"], histogram_freq=1, write_grads=True, write_graph=True, write_images=True)
-
 if __name__ == "__main__":
 
     train_data_pref = data_dir + "train_png"
@@ -531,8 +553,8 @@ if __name__ == "__main__":
     print("Setup done!")
 
     # Network and training params/config
-    n_epochs = 1
-    batch_size = 1
+    n_epochs = 100
+    batch_size = 2
     img_downsampling = 16
     learning_rate = 1e-2
     num_train_examples = 4
@@ -578,21 +600,32 @@ if __name__ == "__main__":
         if use_validation:
             validation_generator = DataLoader(validation_filepaths, batch_size=batch_size,
                                           mask_dir=os.path.join(data_dir, "train_png", "masks"))
+
+        callbacks = [
+            keras.callbacks.TensorBoard(log_dir=config["logdir"], histogram_freq=1, write_grads=True,
+                                                      write_graph=True, write_images=True),
+            BeholderCallback(log_dir=config["logdir"])
+        ]
+
         print("Fitting")
         try:
             model.fit_generator(train_generator, validation_data=validation_generator if use_validation else None,
                                 validation_freq=1 if use_validation else None,
-                                epochs=n_epochs, use_multiprocessing=True, callbacks=[tensorboard])
+                                epochs=n_epochs, use_multiprocessing=True, callbacks=callbacks)
         except KeyboardInterrupt:
             print("Saving model weights in", os.path.join(data_dir, "models", net_filename))
             model.save_weights(os.path.join(data_dir, "models", net_filename))
             print("Done saving model!")
+            exit()
 
     train_generator = DataLoader(train_filepaths, batch_size=batch_size, mask_dir=os.path.join(data_dir, "train_png", "masks"))
     prediction_model = locals()[net_arch] \
         (down_sampling=img_downsampling, learning_rate=learning_rate, give_intermediate=True)
 
     del model
+
+    print("Plotting predictions...")
+
     # Visualisation config
     images_per_row = 16
     layers_to_vis = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
@@ -629,6 +662,7 @@ if __name__ == "__main__":
         plt.savefig(os.path.join(data_dir, "plots", "Layer_" + str(layer_inx+1) + "_" + filename + figure_suffix), bbox_inches="tight")
 
     for to_predict in train_filepaths:
+        print("Plotting predictions/layers from", os.path.split(to_predict)[1], "...")
         x, y = train_generator.load_filepath(to_predict)
 
         pred_layers = prediction_model.predict(np.asarray([x]))
@@ -638,6 +672,7 @@ if __name__ == "__main__":
         plt.savefig(os.path.join(data_dir, "plots", "Input_" + os.path.split(to_predict)[1] + figure_suffix), bbox_inches="tight")
         plt.close('all')
         for layer_inx in layers_to_vis:
+            print("\tOn layer nr.", layer_inx+1)
             pred = pred_layers[layer_inx][0]
             plot_hidden_layer_activations(pred, layer_inx, filename=os.path.split(to_predict)[1])
             plt.close('all')
