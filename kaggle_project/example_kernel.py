@@ -77,8 +77,8 @@ def unet(learning_rate, pretrained_weights=None, input_size=(1024, 1024, 1), dow
         klayer.UpSampling2D(size=(2, 2))(conv8))
     merge9 = klayer.concatenate([conv1, up9], axis=3)
     conv9 = klayer.Conv2D(64, 3, activation=main_activation, padding='same', kernel_initializer='he_normal')(merge9)
-    conv9 = klayer.Conv2D(64, 3, activation=main_activation, padding='same', kernel_initializer='he_normal')(conv9)
-    conv9 = klayer.Conv2D(2, 3, activation=main_activation, padding='same', kernel_initializer='he_normal')(conv9)
+    conv9 = klayer.Conv2D(32, 3, activation=main_activation, padding='same', kernel_initializer='he_normal')(conv9)
+    conv9 = klayer.Conv2D(16, 3, activation=main_activation, padding='same', kernel_initializer='he_normal')(conv9)
     conv10 = klayer.Conv2D(1, 1, activation='sigmoid')(conv9)
 
     out_layer = klayer.UpSampling2D(size=(down_sampling, down_sampling))(conv10)
@@ -530,8 +530,8 @@ if __name__ == "__main__":
 
     print("Setup done!")
 
-    # Network and training params
-    n_epochs = 1
+    # Network and training params/config
+    n_epochs = 10
     batch_size = 1
     img_downsampling = 16
     learning_rate = 1e-2
@@ -569,7 +569,7 @@ if __name__ == "__main__":
             raise Exception
         print("Loading pretrained network weights")
         model.load_weights(os.path.join(data_dir + "models", net_filename))
-    except:
+    except Exception as e:
         print("Was not able to load model...")
         print("Training network!")
 
