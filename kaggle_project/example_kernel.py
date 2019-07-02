@@ -592,6 +592,7 @@ if __name__ == "__main__":
     prediction_model = locals()[net_arch] \
         (down_sampling=img_downsampling, learning_rate=learning_rate, give_intermediate=True)
 
+    # Visualisation config
     images_per_row = 16
     layers_to_vis = [2, 3, 4, 5, 6, 7, 8, 9]
 
