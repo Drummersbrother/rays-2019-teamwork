@@ -67,6 +67,18 @@ class BeholderCallback(Callback):
         K = keras.backend.backend
         sess = keras.backend.get_session()
         self.beholder.update(session=sess)
+    
+    def on_test_begin(*args, **kwargs):
+        pass
+    
+    def on_test_end(*args, **kwargs):
+        pass
+
+    def on_test_batch_begin(*args, **kwargs):
+        pass
+
+    def on_test_batch_end(*args, **kwargs):
+        pass
 
 
 def mod_jaccard(y_true, y_pred, smooth=1):
@@ -118,7 +130,7 @@ def unet(learning_rate, pretrained_weights=None, input_size=(256, 256, 1), down_
     conv9 = klayer.Conv2D(64, 3, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(merge9)
     conv9 = klayer.Conv2D(64, 3, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(conv9)
     conv9 = klayer.Conv2D(2, 3, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(conv9)
-    conv10 = klayer.Conv2D(1, 1, activation = 'sigmoid')(conv9)
+    conv10 = klayer.Conv2D(1, 1, activation = 'tanh')(conv9)
 
     out_layer = conv10
 
@@ -199,15 +211,12 @@ def unet_orig(learning_rate, pretrained_weights=None, input_size=(1024, 1024, 1)
     return model
 
 
-def smet(learning_rate, pretrained_weights=None, input_size=(1024, 1024, 1), down_sampling=4, give_intermediate=False, main_activation="sigmoid", k_initializer="he_normal", zero_weight = 0.5):
-    """Almost directly taken from https://github.com/zhixuhao/unet. Modified to fit into memory"""
+def smet(learning_rate, pretrained_weights=None, input_size=(1024, 1024, 1), down_sampling=4, give_intermediate=False, main_activation=None, k_initializer="he_normal", zero_weight = 0.5):
+    """Our custom small-net"""
     inputs = klayer.Input(input_size)
-    # Rescale to not take too much memory
-    scaled_inputs = klayer.MaxPooling2D(pool_size=(down_sampling, down_sampling))(inputs)
-    conv3 = klayer.Conv2D(1, 1, activation="relu", use_bias=True, padding='same', kernel_initializer=k_initializer)(inputs)
-    #conv3 = klayer.Conv2D(1, 1, activation=main_activation, use_bias=True, padding='same', kernel_initializer=k_initializer)(conv3)
-    out_layer = klayer.UpSampling2D(size=(down_sampling, down_sampling))(conv3)
-    layers = [conv3, out_layer]
+    conv3 = klayer.Conv2D(1, 1, activation=main_activation, use_bias=True, padding='same', kernel_initializer=k_initializer)(inputs)
+    conv3 = klayer.LeakyReLU()(conv3)
+    layers = [conv3]
 
     model = tf.keras.Model(inputs=inputs, outputs=layers if give_intermediate else conv3)
 
@@ -417,8 +426,7 @@ class DataLoader(keras.utils.Sequence):
     def load_filepath(self, filepath):
         a = np.asarray(Image.open(filepath[:-4]+".png"))
         a = preprocess_image(a)
-        X = a[::4,::4]
-        X = (np.expand_dims(X, axis=2).astype(np.float32) + 1) / 2
+        X = (np.expand_dims(a, axis=2).astype(np.float32) + 1) / 2
         
         Y = np.load(os.path.join(self.mask_dir, filepath.split(os.sep)[-1])[:-4])#.T
         #y_rle = self.rles[filepath.split(os.sep)[-1][:-4]]
@@ -635,16 +643,17 @@ if __name__ == "__main__":
     print("Setup done!")
 
     # Network and training params/config
-    dims = (256,256)
+    big_size = (1024, 1024)
     n_epochs = 10
     batch_size = 1
-    img_downsampling = 16
-    learning_rate = 1e-4
-    num_train_examples = 10
-    use_validation = False
-    validation_coeff = 0.1
+    img_downsampling = 1
+    dims = (big_size[0] // img_downsampling, big_size[1] // img_downsampling)
+    learning_rate = 1e-1
+    num_train_examples = 2
+    use_validation = True
+    validation_coeff = 0.5
     retrain = True
-    net_arch = "unet"
+    net_arch = "smet"
 
     # The file in which trained weights are going to be stored
     net_filename = f"{net_arch}-epochs_{n_epochs}-batchsz_{batch_size}-lr_{learning_rate}-downsampling_{img_downsampling}-numexamples_{num_train_examples}"
@@ -667,7 +676,7 @@ if __name__ == "__main__":
     num_validation_examples = int(num_train_examples * validation_coeff)
     train_filepaths = use_filepaths[:-int(validation_coeff*len(use_filepaths)) if use_validation else len(use_filepaths)][:num_train_examples]
     validation_filepaths = use_filepaths[-int(validation_coeff*len(use_filepaths)):][:num_validation_examples]
-    model = locals()[net_arch](down_sampling=img_downsampling, learning_rate=learning_rate)
+    model = locals()[net_arch](learning_rate=learning_rate, input_size=(*dims, 1))
 
     try:
         if retrain:
@@ -678,7 +687,7 @@ if __name__ == "__main__":
         print("Was not able to load model...")
         print("Training network!")
 
-        train_generator = DataLoader(train_filepaths, dim=(256, 256), batch_size=batch_size,
+        train_generator = DataLoader(train_filepaths, dim=dims, batch_size=batch_size,
                                      mask_dir=os.path.join(data_dir, "train_png", "masks"))
         if use_validation:
             validation_generator = DataLoader(validation_filepaths, batch_size=batch_size,
@@ -710,7 +719,7 @@ if __name__ == "__main__":
                 exit()
     train_generator = DataLoader(train_filepaths, batch_size=batch_size, mask_dir=os.path.join(data_dir, "train_png", "masks"))
     prediction_model = locals()[net_arch] \
-        (down_sampling=img_downsampling, learning_rate=learning_rate, give_intermediate=False)
+        (down_sampling=img_downsampling, learning_rate=learning_rate, give_intermediate=True, input_size=(*dims, 1))
 
     del model
 
@@ -768,12 +777,12 @@ if __name__ == "__main__":
             plt.close('all')
         
         plt.subplot(2, 2, 1)
-        plt.imshow(pred_layers.squeeze().round(), vmin=0, vmax=1)
+        plt.imshow(pred_layers[-1].squeeze().round(), vmin=0, vmax=1)
         plt.subplot(2, 2, 2)
         plt.imshow(x.squeeze().astype(np.float32), vmin=0, vmax=1)
         plt.subplot(2, 2, 3)
-        plt.imshow(pred_layers.squeeze(), vmin=0, vmax=1)
+        plt.imshow(pred_layers[-1].squeeze(), vmin=0, vmax=1)
         plt.subplot(2, 2, 4)
         plt.imshow(y.squeeze(), vmin=0, vmax=1)
-        plt.show()
+        plt.savefig(os.path.join(data_dir, "plots", "Summary_" + os.path.split(to_predict)[1] + figure_suffix), bbox_inches="tight")
 
