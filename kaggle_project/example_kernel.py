@@ -32,7 +32,7 @@ def mod_jaccard(y_true, y_pred, smooth=100):
     jac = (intersection + smooth) / (sum_ - intersection + smooth)
     return (1 - jac) * smooth
 
-def unet(learning_rate, pretrained_weights=None, input_size=(1024, 1024, 1), down_sampling=4, out_layer=-1, main_activation="relu"):
+def unet(learning_rate, pretrained_weights=None, input_size=(1024, 1024, 1), down_sampling=4, give_intermediate=False, main_activation="relu"):
     """Almost directly taken from https://github.com/zhixuhao/unet. Modified to fit into memory"""
     inputs = klayer.Input(input_size)
     # Rescale to not take too much memory
@@ -81,9 +81,11 @@ def unet(learning_rate, pretrained_weights=None, input_size=(1024, 1024, 1), dow
     conv9 = klayer.Conv2D(2, 3, activation=main_activation, padding='same', kernel_initializer='he_normal')(conv9)
     conv10 = klayer.Conv2D(1, 1, activation='sigmoid')(conv9)
 
-    layers = [inputs, conv1, conv2, conv3, conv4, conv5, conv6, conv7, conv8, conv9, conv10]
+    out_layer = klayer.UpSampling2D(size=(down_sampling, down_sampling))(conv10)
 
-    model = tf.keras.Model(inputs=inputs, outputs=klayer.UpSampling2D(size=(down_sampling, down_sampling))(layers[out_layer]))
+    layers = [conv1, conv2, conv3, conv4, conv5, conv6, conv7, conv8, conv9, conv10, out_layer]
+
+    model = tf.keras.Model(inputs=inputs, outputs=layers if give_intermediate else out_layer)
 
     model.compile(optimizer=keras.optimizers.SGD(lr=learning_rate), loss=jaccard, metrics=["accuracy"])
 
@@ -587,36 +589,51 @@ if __name__ == "__main__":
             print("Done saving model!")
 
     train_generator = DataLoader(train_filepaths, batch_size=batch_size, mask_dir=os.path.join(data_dir, "train_png", "masks"))
+    prediction_model = locals()[net_arch] \
+        (down_sampling=img_downsampling, learning_rate=learning_rate, give_intermediate=True)
+
+    images_per_row = 16
+    layers_to_vis = [2, 3, 4, 5, 6, 7, 8, 9]
+
+    import math
+    def plot_hidden_layer_activations(pred, layer_inx, imgs_per_row=None):
+        if not imgs_per_row:
+            imgs_per_row = images_per_row
+        # Displays the feature maps
+        n_features = pred.shape[-1]  # Number of features in the feature map
+        size = pred.shape[0]  # The feature map has shape (1, size, size, n_features).
+        n_cols = math.ceil(n_features / imgs_per_row) # Tiles the activation channels in this matrix
+        display_grid = np.zeros((size * n_cols, imgs_per_row * size))
+        for col in range(n_cols):  # Tiles each filter into a big horizontal grid
+            for row in range(imgs_per_row):
+                try:
+                    channel_image = pred[:, :, col * imgs_per_row + row]
+                except IndexError:
+                    break
+                # channel_image -= channel_image.mean()  # Post-processes the feature to make it visually palatable
+                # channel_image /= channel_image.std()
+                # channel_image *= 64
+                # channel_image += 128
+                # channel_image = np.clip(channel_image, 0, 255).astype('uint8')
+                display_grid[col * size: (col + 1) * size,  # Displays the grid
+                row * size: (row + 1) * size] = channel_image
+        scale = 1. / size
+        plt.figure(figsize=(scale * display_grid.shape[1],
+                            scale * display_grid.shape[0]))
+        plt.grid(False)
+        plt.title("Layer nr. " + str(layer_inx + 1))
+        plt.imshow(display_grid, aspect='auto', cmap='bone')
+        plt.show()
 
     for to_predict in train_filepaths:
         x, y = train_generator.load_filepath(to_predict)
 
-        images_per_row = 16
-        layers_to_vis = [1, 2, 3]
+        pred_layers = prediction_model.predict(np.asarray([x]))
+        plt.grid(False)
+        plt.title("Input")
+        plt.imshow(x.squeeze().astype(np.float32), aspect='auto', cmap='bone')
+        plt.show()
         for layer_inx in layers_to_vis:
-            get_hidden_layer_model = locals()[net_arch] \
-                (down_sampling=img_downsampling, learning_rate=learning_rate, out_layer=layer_inx)
-            pred = get_hidden_layer_model.predict(np.asarray([x]))[0]
-            # Displays the feature maps
-            n_features = pred.shape[-1]  # Number of features in the feature map
-            size = pred.shape[0]  # The feature map has shape (1, size, size, n_features).
-            n_cols = n_features // images_per_row  # Tiles the activation channels in this matrix
-            display_grid = np.zeros((size * n_cols, images_per_row * size))
-            for col in range(n_cols):  # Tiles each filter into a big horizontal grid
-                for row in range(images_per_row):
-                    channel_image = pred[:, :, col * images_per_row + row]
-                    #channel_image -= channel_image.mean()  # Post-processes the feature to make it visually palatable
-                    #channel_image /= channel_image.std()
-                    #channel_image *= 64
-                    #channel_image += 128
-                    #channel_image = np.clip(channel_image, 0, 255).astype('uint8')
-                    display_grid[col * size: (col + 1) * size,  # Displays the grid
-                    row * size: (row + 1) * size] = channel_image
-            scale = 1. / size
-            plt.figure(figsize=(scale * display_grid.shape[1],
-                                scale * display_grid.shape[0]))
-            plt.grid(False)
-            plt.title("Layer nr. " + str(layer_inx+1))
-            plt.imshow(display_grid, aspect='auto', cmap='bone')
-            plt.show()
+            pred = pred_layers[layer_inx][0]
+            plot_hidden_layer_activations(pred, layer_inx)
 
