@@ -1,3 +1,5 @@
+
+"""Imports"""
 import tensorflow as tf
 import numpy as np
 from PIL import Image
@@ -11,9 +13,9 @@ from glob import glob
 
 import tensorflow.keras.layers as klayer
 
-#from keras.layers import Input, Dense, Dropout, Activation, concatenate, BatchNormalization
+# from keras.layers import Input, Dense, Dropout, Activation, concatenate, BatchNormalization
 from keras.models import Model
-#from keras.layers import Conv2D, GlobalAveragePooling2D, AveragePooling2D, MaxPooling2D, UpSampling2D
+# from keras.layers import Conv2D, GlobalAveragePooling2D, AveragePooling2D, MaxPooling2D, UpSampling2D
 from keras.regularizers import l2
 
 from keras_contrib.losses.jaccard import jaccard_distance as jaccard
@@ -25,17 +27,21 @@ import keras.backend as K
 from tensorboard.plugins.beholder import Beholder
 
 import json
-with open(os.path.join(os.getcwd(), "config.json"), mode="r") as f:
+
+
+"""Load config"""
+with open("/home/hugo_dev/progs/rays-2019/rays-2019-teamwork/kaggle_project/config.json", mode="r") as f:
     config = json.load(f)
 
 data_dir = config["data_dir"]
 mask_csv_filename = config["mask_csv_filename"]
 
 
+"""Define losses and metrics"""
+
+
 def create_weighted_binary_crossentropy(zero_weight, one_weight):
-
     def weighted_binary_crossentropy(y_true, y_pred):
-
         # Original binary crossentropy (see losses.py):
         # K.mean(K.binary_crossentropy(y_true, y_pred), axis=-1)
 
@@ -77,55 +83,66 @@ def mod_jaccard(y_true, y_pred, smooth=1):
     return (jac) * smooth
 
 
-def unet(learning_rate, pretrained_weights=None, input_size=(256, 256, 1), down_sampling=4, give_intermediate=False, main_activation="relu", k_initializer="he_normal", zero_weight = 0.5):
+
+"""Define neural network models"""
+
+
+def unet(learning_rate, pretrained_weights=None, input_size=(1024, 1024, 1), down_sampling=4, give_intermediate=False,
+         main_activation="relu", k_initializer="he_normal", zero_weight=0.5):
     """Directly taken from https://github.com/zhixuhao/unet. Modified to fit into memory"""
     inputs = klayer.Input(input_size)
-    conv1 = klayer.Conv2D(64, 3, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(inputs)
-    conv1 = klayer.Conv2D(64, 3, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(conv1)
+    scaled_ins = klayer.MaxPooling2D(pool_size=(8, 8))(inputs)
+    conv1 = klayer.Conv2D(64, 3, activation=keras.layers.LeakyReLU(), padding='same', kernel_initializer='he_normal')(scaled_ins)
+    conv1 = klayer.Conv2D(64, 3, activation=keras.layers.LeakyReLU(), padding='same', kernel_initializer='he_normal')(conv1)
     pool1 = klayer.MaxPooling2D(pool_size=(2, 2))(conv1)
-    conv2 = klayer.Conv2D(128, 3, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(pool1)
-    conv2 = klayer.Conv2D(128, 3, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(conv2)
+    conv2 = klayer.Conv2D(128, 3, activation=keras.layers.LeakyReLU(), padding='same', kernel_initializer='he_normal')(pool1)
+    conv2 = klayer.Conv2D(128, 3, activation=keras.layers.LeakyReLU(), padding='same', kernel_initializer='he_normal')(conv2)
     pool2 = klayer.MaxPooling2D(pool_size=(2, 2))(conv2)
-    conv3 = klayer.Conv2D(256, 3, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(pool2)
-    conv3 = klayer.Conv2D(256, 3, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(conv3)
+    conv3 = klayer.Conv2D(256, 3, activation=keras.layers.LeakyReLU(), padding='same', kernel_initializer='he_normal')(pool2)
+    conv3 = klayer.Conv2D(256, 3, activation=keras.layers.LeakyReLU(), padding='same', kernel_initializer='he_normal')(conv3)
     pool3 = klayer.MaxPooling2D(pool_size=(2, 2))(conv3)
-    conv4 = klayer.Conv2D(512, 3, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(pool3)
-    conv4 = klayer.Conv2D(512, 3, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(conv4)
+    conv4 = klayer.Conv2D(512, 3, activation=keras.layers.LeakyReLU(), padding='same', kernel_initializer='he_normal')(pool3)
+    conv4 = klayer.Conv2D(512, 3, activation=keras.layers.LeakyReLU(), padding='same', kernel_initializer='he_normal')(conv4)
     drop4 = klayer.Dropout(0.5)(conv4)
     pool4 = klayer.MaxPooling2D(pool_size=(2, 2))(drop4)
 
-    conv5 = klayer.Conv2D(1024, 3, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(pool4)
-    conv5 = klayer.Conv2D(1024, 3, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(conv5)
+    conv5 = klayer.Conv2D(1024, 3, activation=keras.layers.LeakyReLU(), padding='same', kernel_initializer='he_normal')(pool4)
+    conv5 = klayer.Conv2D(1024, 3, activation=keras.layers.LeakyReLU(), padding='same', kernel_initializer='he_normal')(conv5)
     drop5 = klayer.Dropout(0.5)(conv5)
 
-    up6 = klayer.Conv2D(512, 2, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(klayer.UpSampling2D(size = (2,2))(drop5))
-    merge6 = klayer.concatenate([drop4,up6], axis = 3)
-    conv6 = klayer.Conv2D(512, 3, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(merge6)
-    conv6 = klayer.Conv2D(512, 3, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(conv6)
+    up6 = klayer.Conv2D(512, 2, activation=keras.layers.LeakyReLU(), padding='same', kernel_initializer='he_normal')(
+        klayer.UpSampling2D(size=(2, 2))(drop5))
+    merge6 = klayer.concatenate([drop4, up6], axis=3)
+    conv6 = klayer.Conv2D(512, 3, activation=keras.layers.LeakyReLU(), padding='same', kernel_initializer='he_normal')(merge6)
+    conv6 = klayer.Conv2D(512, 3, activation=keras.layers.LeakyReLU(), padding='same', kernel_initializer='he_normal')(conv6)
 
-    up7 = klayer.Conv2D(256, 2, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(klayer.UpSampling2D(size = (2,2))(conv6))
-    merge7 = klayer.concatenate([conv3,up7], axis = 3)
-    conv7 = klayer.Conv2D(256, 3, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(merge7)
-    conv7 = klayer.Conv2D(256, 3, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(conv7)
+    up7 = klayer.Conv2D(256, 2, activation=keras.layers.LeakyReLU(), padding='same', kernel_initializer='he_normal')(
+        klayer.UpSampling2D(size=(2, 2))(conv6))
+    merge7 = klayer.concatenate([conv3, up7], axis=3)
+    conv7 = klayer.Conv2D(256, 3, activation=keras.layers.LeakyReLU(), padding='same', kernel_initializer='he_normal')(merge7)
+    conv7 = klayer.Conv2D(256, 3, activation=keras.layers.LeakyReLU(), padding='same', kernel_initializer='he_normal')(conv7)
 
-    up8 = klayer.Conv2D(128, 2, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(klayer.UpSampling2D(size = (2,2))(conv7))
-    merge8 = klayer.concatenate([conv2,up8], axis = 3)
-    conv8 = klayer.Conv2D(128, 3, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(merge8)
-    conv8 = klayer.Conv2D(128, 3, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(conv8)
+    up8 = klayer.Conv2D(128, 2, activation=keras.layers.LeakyReLU(), padding='same', kernel_initializer='he_normal')(
+        klayer.UpSampling2D(size=(2, 2))(conv7))
+    merge8 = klayer.concatenate([conv2, up8], axis=3)
+    conv8 = klayer.Conv2D(128, 3, activation=keras.layers.LeakyReLU(), padding='same', kernel_initializer='he_normal')(merge8)
+    conv8 = klayer.Conv2D(128, 3, activation=keras.layers.LeakyReLU(), padding='same', kernel_initializer='he_normal')(conv8)
 
-    up9 = klayer.Conv2D(64, 2, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(klayer.UpSampling2D(size = (2,2))(conv8))
-    merge9 = klayer.concatenate([conv1,up9], axis = 3)
-    conv9 = klayer.Conv2D(64, 3, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(merge9)
-    conv9 = klayer.Conv2D(64, 3, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(conv9)
-    conv9 = klayer.Conv2D(2, 3, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(conv9)
-    conv10 = klayer.Conv2D(1, 1, activation = 'sigmoid')(conv9)
+    up9 = klayer.Conv2D(64, 2, activation=keras.layers.LeakyReLU(), padding='same', kernel_initializer='he_normal')(
+        klayer.UpSampling2D(size=(2, 2))(conv8))
+    merge9 = klayer.concatenate([conv1, up9], axis=3)
+    conv9 = klayer.Conv2D(64, 3, activation=keras.layers.LeakyReLU(), padding='same', kernel_initializer='he_normal')(merge9)
+    conv9 = klayer.Conv2D(64, 3, activation=keras.layers.LeakyReLU(), padding='same', kernel_initializer='he_normal')(conv9)
+    conv9 = klayer.Conv2D(2, 3, activation=keras.layers.LeakyReLU(), padding='same', kernel_initializer='he_normal')(conv9)
+    conv10 = klayer.Conv2D(1, 1, activation=keras.layers.LeakyReLU())(conv9)
 
-    out_layer = conv10
+    out_layer = klayer.UpSampling2D(size=(8, 8))(conv10)
 
     layers = [conv1, conv2, conv3, conv4, conv5, conv6, conv7, conv8, conv9, conv10, out_layer]
 
     model = tf.keras.Model(inputs=inputs, outputs=layers if give_intermediate else out_layer)
-    model.compile(optimizer=keras.optimizers.Adam(lr=learning_rate), loss=keras.losses.MSE, metrics=[metrics.binary_accuracy, mod_jaccard])
+    model.compile(optimizer=keras.optimizers.Adam(lr=learning_rate), loss=keras.losses.MSE,
+                  metrics=[metrics.binary_accuracy, mod_jaccard])
 
     # model.summary()
 
@@ -135,12 +152,14 @@ def unet(learning_rate, pretrained_weights=None, input_size=(256, 256, 1), down_
     return model
 
 
-def unet_orig(learning_rate, pretrained_weights=None, input_size=(1024, 1024, 1), down_sampling=4, give_intermediate=False, main_activation="relu", k_initializer="he_normal", zero_weight = 0.5):
+def unet_orig(learning_rate, pretrained_weights=None, input_size=(1024, 1024, 1), down_sampling=4,
+              give_intermediate=False, main_activation="relu", k_initializer="he_normal", zero_weight=0.5):
     """Almost directly taken from https://github.com/zhixuhao/unet. Modified to fit into memory"""
     inputs = klayer.Input(input_size)
     # Rescale to not take too much memory
     scaled_inputs = klayer.MaxPooling2D(pool_size=(down_sampling, down_sampling))(inputs)
-    conv1 = klayer.Conv2D(64, 3, activation=main_activation, padding='same', kernel_initializer=k_initializer)(scaled_inputs)
+    conv1 = klayer.Conv2D(64, 3, activation=main_activation, padding='same', kernel_initializer=k_initializer)(
+        scaled_inputs)
     conv1 = klayer.Conv2D(64, 3, activation=main_activation, padding='same', kernel_initializer=k_initializer)(conv1)
     pool1 = klayer.MaxPooling2D(pool_size=(2, 2))(conv1)
     conv2 = klayer.Conv2D(128, 3, activation=main_activation, padding='same', kernel_initializer=k_initializer)(pool1)
@@ -189,7 +208,9 @@ def unet_orig(learning_rate, pretrained_weights=None, input_size=(1024, 1024, 1)
     layers = [conv1, conv2, conv3, conv4, conv5, conv6, conv7, conv8, conv9, conv10, out_layer]
 
     model = tf.keras.Model(inputs=inputs, outputs=layers if give_intermediate else out_layer)
-    model.compile(optimizer=keras.optimizers.Adam(lr=learning_rate), loss=create_weighted_binary_crossentropy(zero_weight=zero_weight, one_weight=1-zero_weight), metrics=["accuracy"])
+    model.compile(optimizer=keras.optimizers.Adam(lr=learning_rate),
+                  loss=create_weighted_binary_crossentropy(zero_weight=zero_weight, one_weight=1 - zero_weight),
+                  metrics=["accuracy"])
 
     # model.summary()
 
@@ -199,28 +220,25 @@ def unet_orig(learning_rate, pretrained_weights=None, input_size=(1024, 1024, 1)
     return model
 
 
-def smet(learning_rate, pretrained_weights=None, input_size=(1024, 1024, 1), down_sampling=4, give_intermediate=False, main_activation="sigmoid", k_initializer="he_normal", zero_weight = 0.5):
+def smet(learning_rate, pretrained_weights=None, input_size=(1024, 1024, 1), down_sampling=4, give_intermediate=False,
+         main_activation="sigmoid", k_initializer="he_normal", zero_weight=0.5):
     """Almost directly taken from https://github.com/zhixuhao/unet. Modified to fit into memory"""
     inputs = klayer.Input(input_size)
-    # Rescale to not take too much memory
-    scaled_inputs = klayer.MaxPooling2D(pool_size=(down_sampling, down_sampling))(inputs)
-    conv3 = klayer.Conv2D(1, 1, activation="relu", use_bias=True, padding='same', kernel_initializer=k_initializer)(inputs)
-    #conv3 = klayer.Conv2D(1, 1, activation=main_activation, use_bias=True, padding='same', kernel_initializer=k_initializer)(conv3)
+    conv3 = klayer.Conv2D(1, 1, activation=None, use_bias=False, padding='same', kernel_initializer=k_initializer)(
+        inputs)
     out_layer = klayer.UpSampling2D(size=(down_sampling, down_sampling))(conv3)
     layers = [conv3, out_layer]
 
     model = tf.keras.Model(inputs=inputs, outputs=layers if give_intermediate else conv3)
 
-    model.compile(optimizer=keras.optimizers.Adam(lr=learning_rate), loss=keras.losses.MSE, metrics=[metrics.binary_accuracy, mod_jaccard])
+    model.compile(optimizer=keras.optimizers.Adam(lr=learning_rate), loss=keras.losses.MSE,
+                  metrics=[metrics.binary_accuracy, mod_jaccard])
 
     # model.summary()
-    #all_layers_output = keras.backend.function([model.layers[0].input],
+    # all_layers_output = keras.backend.function([model.layers[0].input],
     #           [l.output for l in model.layers[1:]])
 
-    if pretrained_weights:
-        model.load_weights(pretrained_weights)
-
-    return model#, all_layers_output
+    return model
 
 
 def DenseNet(input_shape=None, dense_blocks=3, dense_layers=-1, growth_rate=12, nb_classes=None, dropout_rate=None,
@@ -267,7 +285,7 @@ def DenseNet(input_shape=None, dense_blocks=3, dense_layers=-1, growth_rate=12, 
     else:
         dense_layers = [int(dense_layers) for _ in range(dense_blocks)]
 
-    img_input = Input(shape=input_shape)
+    img_input = klayer.Input(shape=input_shape)
     nb_channels = growth_rate * 2
 
     print('Creating DenseNet')
@@ -277,7 +295,7 @@ def DenseNet(input_shape=None, dense_blocks=3, dense_layers=-1, growth_rate=12, 
     print('#############################################')
 
     # Initial convolution layer
-    x = Conv2D(nb_channels, (3, 3), padding='same', strides=(1, 1),
+    x = klayer.Conv2D(nb_channels, (3, 3), padding='same', strides=(1, 1),
                use_bias=False, kernel_regularizer=l2(weight_decay))(img_input)
 
     # Building dense blocks
@@ -292,11 +310,11 @@ def DenseNet(input_shape=None, dense_blocks=3, dense_layers=-1, growth_rate=12, 
             x = transition_layer(x, nb_channels, dropout_rate, compression, weight_decay)
             nb_channels = int(nb_channels * compression)
 
-    x = BatchNormalization(gamma_regularizer=l2(weight_decay), beta_regularizer=l2(weight_decay))(x)
-    x = Activation('relu')(x)
-    x = GlobalAveragePooling2D()(x)
+    x = klayer.BatchNormalization(gamma_regularizer=l2(weight_decay), beta_regularizer=l2(weight_decay))(x)
+    x = klayer.Activation('relu')(x)
+    x = klayer.GlobalAveragePooling2D()(x)
 
-    x = Dense(nb_classes, activation='softmax', kernel_regularizer=l2(weight_decay), bias_regularizer=l2(weight_decay))(
+    x = klayer.Dense(nb_classes, activation='softmax', kernel_regularizer=l2(weight_decay), bias_regularizer=l2(weight_decay))(
         x)
 
     model_name = None
@@ -323,7 +341,7 @@ def dense_block(x, nb_layers, nb_channels, growth_rate, dropout_rate=None, bottl
     for i in range(nb_layers):
         cb = convolution_block(x, growth_rate, dropout_rate, bottleneck, weight_decay)
         x_list.append(cb)
-        x = Concatenate(axis=-1)(x_list)
+        x = klayer.Concatenate(axis=-1)(x_list)
         nb_channels += growth_rate
     return x, nb_channels
 
@@ -337,21 +355,21 @@ def convolution_block(x, nb_channels, dropout_rate=None, bottleneck=False, weigh
     # Bottleneck
     if bottleneck:
         bottleneckWidth = 4
-        x = BatchNormalization(gamma_regularizer=l2(weight_decay), beta_regularizer=l2(weight_decay))(x)
-        x = Activation('relu')(x)
-        x = Conv2D(nb_channels * bottleneckWidth, (1, 1), use_bias=False, kernel_regularizer=l2(weight_decay))(x)
+        x = klayer.BatchNormalization(gamma_regularizer=l2(weight_decay), beta_regularizer=l2(weight_decay))(x)
+        x = klayer.Activation('relu')(x)
+        x = klayer.Conv2D(nb_channels * bottleneckWidth, (1, 1), use_bias=False, kernel_regularizer=l2(weight_decay))(x)
         # Dropout
         if dropout_rate:
-            x = Dropout(dropout_rate)(x)
+            x = klayer.Dropout(dropout_rate)(x)
 
     # Standard (BN-ReLU-Conv)
-    x = BatchNormalization(gamma_regularizer=l2(weight_decay), beta_regularizer=l2(weight_decay))(x)
-    x = Activation('relu')(x)
-    x = Conv2D(nb_channels, (3, 3), padding='same', use_bias=False, kernel_regularizer=l2(weight_decay))(x)
+    x = klayer.BatchNormalization(gamma_regularizer=l2(weight_decay), beta_regularizer=l2(weight_decay))(x)
+    x = klayer.Activation('relu')(x)
+    x = klayer.Conv2D(nb_channels, (3, 3), padding='same', use_bias=False, kernel_regularizer=l2(weight_decay))(x)
 
     # Dropout
     if dropout_rate:
-        x = Dropout(dropout_rate)(x)
+        x = klayer.Dropout(dropout_rate)(x)
 
     return x
 
@@ -362,17 +380,21 @@ def transition_layer(x, nb_channels, dropout_rate=None, compression=1.0, weight_
     Works as downsampling.
     """
 
-    x = BatchNormalization(gamma_regularizer=l2(weight_decay), beta_regularizer=l2(weight_decay))(x)
-    x = Activation('relu')(x)
-    x = Conv2D(int(nb_channels * compression), (1, 1), padding='same',
+    x = klayer.BatchNormalization(gamma_regularizer=l2(weight_decay), beta_regularizer=l2(weight_decay))(x)
+    x = klayer.Activation('relu')(x)
+    x = klayer.Conv2D(int(nb_channels * compression), (1, 1), padding='same',
                use_bias=False, kernel_regularizer=l2(weight_decay))(x)
 
     # Adding dropout
     if dropout_rate:
-        x = Dropout(dropout_rate)(x)
+        x = klayer.Dropout(dropout_rate)(x)
 
-    x = AveragePooling2D((2, 2), strides=(2, 2))(x)
+    x = klayer.AveragePooling2D((2, 2), strides=(2, 2))(x)
     return x
+
+
+
+"""Define data_loader"""
 
 
 class DataLoader(keras.utils.Sequence):
@@ -415,14 +437,13 @@ class DataLoader(keras.utils.Sequence):
         return X, Y
 
     def load_filepath(self, filepath):
-        a = np.asarray(Image.open(filepath[:-4]+".png"))
+        a = np.asarray(Image.open(filepath[:-4] + ".png"))
         a = preprocess_image(a)
-        X = a[::4,::4]
-        X = (np.expand_dims(X, axis=2).astype(np.float32) + 1) / 2
-        
-        Y = np.load(os.path.join(self.mask_dir, filepath.split(os.sep)[-1])[:-4])#.T
-        #y_rle = self.rles[filepath.split(os.sep)[-1][:-4]]
-        #Y = rle2mask(y_rle, *self.dim).T
+        X = (np.expand_dims(a, axis=2).astype(np.float32) + 1) / 2
+
+        Y = np.load(os.path.join(self.mask_dir, filepath.split(os.sep)[-1])[:-4])  # .T
+        # y_rle = self.rles[filepath.split(os.sep)[-1][:-4]]
+        # Y = rle2mask(y_rle, *self.dim).T
         #  Y = np.reshape(Y, self.dim)
         #  Y = np.expand_dims(Y, axis=2).astype(np.float)
         #  Y = (X>0.5).astype(np.float)
@@ -543,237 +564,273 @@ def preprocess_image(image_array: np.ndarray):
 
 
 def preprocess_mask(mask: np.ndarray):
-    #mask = mask-128
-    #mask = mask/128
+    # mask = mask-128
+    # mask = mask/128
     return mask
 
 
-if __name__ == "__main__":
-    keras.backend.clear_session()
-    train_data_pref = data_dir + "train_png"
-    test_data_pref = data_dir + "test_png"
 
+"""Check that all data exists and is properly preprocessed"""
+train_data_pref = data_dir + "train_png"
+test_data_pref = data_dir + "test_png"
+
+try:
+    with open(data_dir + "valid_train_filepaths", mode="r") as f:
+        valid_train_filepaths = f.read().split("\n")
+    print("Loaded data from old list of valid data files")
+except FileNotFoundError:
+    print("Re-checking which data files are valid")
+    print(os.path.join(mask_csv_filename))
+    rle_data = pd.read_csv(mask_csv_filename, header=None, index_col=0)
+    valid_train_filepaths = [file_path[:-4] + ".npy" for file_path in
+                             glob(os.path.join(train_data_pref, "*.png"), recursive=True)
+                             if check_valid_datafile(file_path, rle_data)]
+    valid_test_filepaths = [file_path[:-4] + ".npy" for file_path in
+                            glob(os.path.join(test_data_pref, "*.png"), recursive=True)
+                            if check_valid_datafile(file_path, rle_data, needs_label=False)]
+
+    print(len(valid_test_filepaths), len(valid_train_filepaths))
+
+    print("Converting all files into numpy-native format")
+
+
+    def store_np_file(filepath):
+        pass  # a = np.asarray(Image.open(filepath[:-4]+".png"))
+        # a = preprocess_image(a)
+        # a = np.expand_dims(a, axis=2)
+        # np.save(filepath, a)
+
+
+    import sys
+
+    for inx, f in enumerate(valid_test_filepaths):
+        store_np_file(f)
+        if inx % 100 == 0:
+            print(inx)
+    for inx, f in enumerate(valid_train_filepaths):
+        store_np_file(f)
+        if inx % 100 == 0:
+            print(inx)
+
+    with open(data_dir + "valid_train_filepaths", mode="w") as f:
+        f.write("\n".join(valid_train_filepaths))
+    with open(data_dir + "valid_test_filepaths", mode="w") as f:
+        f.write("\n".join(valid_test_filepaths))
+
+with open(mask_csv_filename, mode="r") as f:
+    raw_rle = f.read()
+
+
+def check_store_mask_file(raw_csv_data):
+    key, rle_d = raw_csv_data.split(",")
     try:
-        with open(data_dir + "valid_train_filepaths", mode="r") as f:
-            valid_train_filepaths = f.read().split("\n")
-        print("Loaded data from old list of valid data files")
+        with open(os.path.join(data_dir, "train_png", "masks", key), mode="r") as f:
+            pass
     except FileNotFoundError:
-        print("Re-checking which data files are valid")
-        print(os.path.join(mask_csv_filename))
-        rle_data = pd.read_csv(mask_csv_filename, header=None, index_col=0)
-        valid_train_filepaths = [file_path[:-4]+".npy" for file_path in
-                                 glob(os.path.join(train_data_pref, "*.png"), recursive=True)
-                                 if check_valid_datafile(file_path, rle_data)]
-        valid_test_filepaths = [file_path[:-4]+".npy" for file_path in
-                                glob(os.path.join(test_data_pref, "*.png"), recursive=True)
-                                if check_valid_datafile(file_path, rle_data, needs_label=False)]
+        rle_d = [x for x in rle_d.split() if x != ""]
+        mask = rle2mask(rle_d, 1024, 1024).astype(np.bool)
+        mask = preprocess_mask(mask)
+        mask = mask.reshape((1024, 1024)).T
+        # plt.imshow(mask)
+        # plt.show()
+        with open(os.path.join(data_dir, "train_png", "masks", key), mode="wb") as f:
+            np.save(f, mask)
 
-        print(len(valid_test_filepaths), len(valid_train_filepaths))
-
-        print("Converting all files into numpy-native format")
-
-        def store_np_file(filepath):
-            pass#a = np.asarray(Image.open(filepath[:-4]+".png"))
-            #a = preprocess_image(a)
-            #a = np.expand_dims(a, axis=2)
-            #np.save(filepath, a)
-
-        import sys
-
-        for inx, f in enumerate(valid_test_filepaths):
-            store_np_file(f)
-            if inx % 100 == 0:
-                print(inx)
-        for inx, f in enumerate(valid_train_filepaths):
-            store_np_file(f)
-            if inx % 100 == 0:
-                print(inx)
-
-        with open(data_dir + "valid_train_filepaths", mode="w") as f:
-            f.write("\n".join(valid_train_filepaths))
-        with open(data_dir + "valid_test_filepaths", mode="w") as f:
-            f.write("\n".join(valid_test_filepaths))
-
-    with open(mask_csv_filename, mode="r") as f:
-        raw_rle = f.read()
-
-    def check_store_mask_file(raw_csv_data):
-        key, rle_d = raw_csv_data.split(",")
-        try:
-            with open(os.path.join(data_dir, "train_png", "masks", key), mode="r") as f:
-                pass
-        except FileNotFoundError:
-            rle_d = [x for x in rle_d.split() if x != ""]
-            mask = rle2mask(rle_d, 1024, 1024).astype(np.bool)
-            mask = preprocess_mask(mask)
-            mask = mask.reshape((1024, 1024)).T
-            #plt.imshow(mask)
-            #plt.show()
-            with open(os.path.join(data_dir, "train_png", "masks", key), mode="wb") as f:
-                np.save(f, mask)
-
-        return os.path.join(data_dir, "train_png", "masks", key)
-
-    mask_processing_pool = Pool(cpu_count())
-    try:
-        with open(os.path.join(data_dir, "valid_mask_paths"), mode="r") as f:
-            valid_mask_paths = f.read().split("\n")
-            print("Used precomputed valid mask paths")
-    except FileNotFoundError:
-        valid_mask_paths = []
-        print("Computing valid mask paths")
-        for inx, key in enumerate(raw_rle.split("\n")):
-            valid_mask_paths.append(check_store_mask_file(key))
-            if inx % 100 == 0:
-                print(inx)
-
-        with open(os.path.join(data_dir, "valid_mask_paths"), mode="w") as f:
-            f.write("\n".join(valid_mask_paths))
-
-        print("Done computing valid mask paths")
-
-    print("Setup done!")
-
-    # Network and training params/config
-    dims = (256,256)
-    n_epochs = 10
-    batch_size = 1
-    img_downsampling = 16
-    learning_rate = 1e-4
-    num_train_examples = 10
-    use_validation = False
-    validation_coeff = 0.1
-    retrain = True
-    net_arch = "unet"
-
-    # The file in which trained weights are going to be stored
-    net_filename = f"{net_arch}-epochs_{n_epochs}-batchsz_{batch_size}-lr_{learning_rate}-downsampling_{img_downsampling}-numexamples_{num_train_examples}"
+    return os.path.join(data_dir, "train_png", "masks", key)
 
 
-    with open(mask_csv_filename, mode="r") as f:
-            raw_rle = f.read()
-    raw_csv_data = raw_rle.split("\n")
-    haspneumo_lookup = {}
-    for line in raw_csv_data:
-        key,rle = line.split(",")
-        haspneumo_lookup[key] = False if rle.strip() == "-1" else True
-    
-    pneumo_filepaths = []
-    for path in valid_train_filepaths:
-        if haspneumo_lookup[os.path.split(path)[1][:-4]]:
-            pneumo_filepaths.append(path)
+mask_processing_pool = Pool(cpu_count())
+try:
+    with open(os.path.join(data_dir, "valid_mask_paths"), mode="r") as f:
+        valid_mask_paths = f.read().split("\n")
+        print("Used precomputed valid mask paths")
+except FileNotFoundError:
+    valid_mask_paths = []
+    print("Computing valid mask paths")
+    for inx, key in enumerate(raw_rle.split("\n")):
+        valid_mask_paths.append(check_store_mask_file(key))
+        if inx % 100 == 0:
+            print(inx)
 
-    use_filepaths = pneumo_filepaths
-    num_validation_examples = int(num_train_examples * validation_coeff)
-    train_filepaths = use_filepaths[:-int(validation_coeff*len(use_filepaths)) if use_validation else len(use_filepaths)][:num_train_examples]
-    validation_filepaths = use_filepaths[-int(validation_coeff*len(use_filepaths)):][:num_validation_examples]
-    model = locals()[net_arch](down_sampling=img_downsampling, learning_rate=learning_rate)
+    with open(os.path.join(data_dir, "valid_mask_paths"), mode="w") as f:
+        f.write("\n".join(valid_mask_paths))
 
-    try:
-        if retrain:
-            raise Exception
-        print("Loading pretrained network weights, from", os.path.join(data_dir + "models", net_filename))
-        model.load_weights(os.path.join(data_dir + "models", net_filename))
-    except Exception as e:
-        print("Was not able to load model...")
-        print("Training network!")
+    print("Done computing valid mask paths")
 
-        train_generator = DataLoader(train_filepaths, dim=(256, 256), batch_size=batch_size,
-                                     mask_dir=os.path.join(data_dir, "train_png", "masks"))
-        if use_validation:
-            validation_generator = DataLoader(validation_filepaths, batch_size=batch_size,
+print("Setup done!")
+
+
+"""Setup network training params"""
+
+# Network and training params/config
+dims = (1024, 1024)
+n_epochs = 1
+batch_size = 1
+img_downsampling = 1
+learning_rate = 1e-4
+num_train_examples = 10
+use_validation = False
+validation_coeff = 0.1
+retrain = True
+net_arch = "unet"
+monitor_weights = False
+
+# The file in which trained weights are going to be stored
+net_filename = f"{net_arch}-epochs_{n_epochs}-batchsz_{batch_size}-lr_{learning_rate}-downsampling_{img_downsampling}-numexamples_{num_train_examples}"
+
+"""Filter filepaths to ones that we actually want to train against"""
+with open(mask_csv_filename, mode="r") as f:
+    raw_rle = f.read()
+raw_csv_data = raw_rle.split("\n")
+haspneumo_lookup = {}
+for line in raw_csv_data:
+    key, rle = line.split(",")
+    haspneumo_lookup[key] = False if rle.strip() == "-1" else True
+
+pneumo_filepaths = []
+for path in valid_train_filepaths:
+    if haspneumo_lookup[os.path.split(path)[1][:-4]]:
+        pneumo_filepaths.append(path)
+
+use_filepaths = pneumo_filepaths
+num_validation_examples = int(num_train_examples * validation_coeff)
+train_filepaths = use_filepaths[:-int(validation_coeff * len(use_filepaths)) if use_validation else len(use_filepaths)][
+                  :num_train_examples]
+validation_filepaths = use_filepaths[-int(validation_coeff * len(use_filepaths)):][:num_validation_examples]
+
+"""Train the network"""
+keras.backend.clear_session()
+
+model = locals()[net_arch](down_sampling=img_downsampling, learning_rate=learning_rate)
+
+monitor_weights_callback = keras.callbacks.LambdaCallback(on_epoch_end=lambda batch, logs:
+    ([print(layer.get_weights()) for layer in model.layers]))
+
+try:
+    if retrain:
+        raise Exception
+    print("Loading pretrained network weights, from", os.path.join(data_dir + "models", net_filename))
+    model.load_weights(os.path.join(data_dir + "models", net_filename))
+except Exception as e:
+    print("Was not able to load model...")
+    print("Training network!")
+
+    train_generator = DataLoader(train_filepaths, dim=dims, batch_size=batch_size,
+                                 mask_dir=os.path.join(data_dir, "train_png", "masks"))
+    if use_validation:
+        validation_generator = DataLoader(validation_filepaths, dim=dims, batch_size=batch_size,
                                           mask_dir=os.path.join(data_dir, "train_png", "masks"))
 
-        callbacks = [
-            keras.callbacks.TensorBoard(log_dir=config["logdir"], histogram_freq=1, write_grads=True,
-                                                      write_graph=True, write_images=True),
-            BeholderCallback(log_dir=config["logdir"]),
-            keras.callbacks.EarlyStopping(monitor="loss", patience=10, restore_best_weights=True),
-            keras.callbacks.ReduceLROnPlateau(monitor="loss", factor=0.5, patience=4)
-        ]
+    callbacks = [
+        keras.callbacks.TensorBoard(log_dir=config["logdir"], histogram_freq=1, write_grads=True,
+                                    write_graph=True, write_images=True),
+        BeholderCallback(log_dir=config["logdir"]),
+        keras.callbacks.EarlyStopping(monitor="loss", patience=10, restore_best_weights=True),
+        keras.callbacks.ReduceLROnPlateau(monitor="loss", factor=0.5, patience=4)
+    ]
+    if monitor_weights:
+        callbacks.append(monitor_weights_callback)
 
-        print("Fitting")
-        try:
-            please_stop = False
-            model.fit_generator(train_generator, validation_data=validation_generator if use_validation else None,
-                                validation_freq=1 if use_validation else None,
-                                epochs=n_epochs, use_multiprocessing=True, callbacks=callbacks)
-        except KeyboardInterrupt:
-            please_stop = True
-        except Exception as e:
-            raise e
-        finally:
-            print("Saving model weights in", os.path.join(data_dir, "models", net_filename))
-            model.save_weights(os.path.join(data_dir, "models", net_filename))
-            print("Done saving model!")
-            if please_stop:
-                exit()
-    train_generator = DataLoader(train_filepaths, batch_size=batch_size, mask_dir=os.path.join(data_dir, "train_png", "masks"))
-    prediction_model = locals()[net_arch] \
-        (down_sampling=img_downsampling, learning_rate=learning_rate, give_intermediate=False)
+    print("Fitting")
+    try:
+        please_stop = False
+        model.fit(x=np.asarray([train_generator.load_filepath(f)[0] for f in train_filepaths]),
+                  y=np.asarray([train_generator.load_filepath(f)[1] for f in train_filepaths]),
+                  validation_data=validation_generator if use_validation else None,
+                  validation_freq=1 if use_validation else None,
+                  batch_size=batch_size,
+                  epochs=n_epochs, use_multiprocessing=True,
+                  callbacks=callbacks)
 
-    del model
+    except KeyboardInterrupt:
+        please_stop = True
+    except Exception as e:
+        raise e
+    finally:
+        print("Saving model weights in", os.path.join(data_dir, "models", net_filename))
+        model.save_weights(os.path.join(data_dir, "models", net_filename))
+        print("Done saving model!")
+        if please_stop:
+            exit()
+train_generator = DataLoader(train_filepaths, batch_size=batch_size,
+                             mask_dir=os.path.join(data_dir, "train_png", "masks"))
+prediction_model = locals()[net_arch] \
+    (down_sampling=img_downsampling, learning_rate=learning_rate, give_intermediate=False)
 
-    print("Plotting predictions...")
+prediction_model.load_weights(os.path.join(data_dir, "models", net_filename))
 
-    # Visualisation config
-    images_per_row = 16
-    layers_to_vis = []#[0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
-    figure_suffix = ".png"
+del model
 
-    import math
-    def plot_hidden_layer_activations(pred, layer_inx, imgs_per_row=None, filename=""):
-        if not imgs_per_row:
-            imgs_per_row = images_per_row
-        # Displays the feature maps
-        n_features = pred.shape[-1]  # Number of features in the feature map
-        size = pred.shape[0]  # The feature map has shape (1, size, size, n_features).
-        n_cols = math.ceil(n_features / imgs_per_row) # Tiles the activation channels in this matrix
-        display_grid = np.zeros((size * n_cols, imgs_per_row * size))
-        for col in range(n_cols):  # Tiles each filter into a big horizontal grid
-            for row in range(imgs_per_row):
-                try:
-                    channel_image = pred[:, :, col * imgs_per_row + row]
-                except IndexError:
-                    break
-                # channel_image -= channel_image.mean()  # Post-processes the feature to make it visually palatable
-                # channel_image /= channel_image.std()
-                # channel_image *= 64
-                # channel_image += 128
-                # channel_image = np.clip(channel_image, 0, 255).astype('uint8')
-                display_grid[col * size: (col + 1) * size,  # Displays the grid
-                row * size: (row + 1) * size] = channel_image
-        scale = 1. / size
-        plt.figure(figsize=(scale * display_grid.shape[1],
-                            scale * display_grid.shape[0]))
-        plt.grid(False)
-        plt.title("Layer nr. " + str(layer_inx + 1))
-        plt.imshow(display_grid, aspect='auto', cmap='bone')
-        plt.savefig(os.path.join(data_dir, "plots", "Layer_" + str(layer_inx+1) + "_" + filename + figure_suffix), bbox_inches="tight")
 
-    for to_predict in train_filepaths:
-        print("Plotting predictions/layers from", os.path.split(to_predict)[1], "...")
-        x, y = train_generator.load_filepath(to_predict)
+"""Prediction/visualisation config"""
+# Visualisation config
+images_per_row = 16
+layers_to_vis = []  # [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+figure_suffix = ".png"
 
-        pred_layers = prediction_model.predict(np.asarray([x]))
-        plt.grid(False)
-        plt.title("Input")
-        plt.imshow(x.squeeze().astype(np.float32), aspect='auto', cmap='bone')
-        plt.savefig(os.path.join(data_dir, "plots", "Input_" + os.path.split(to_predict)[1] + figure_suffix), bbox_inches="tight")
+"""Plot network predictions"""
+
+print("Plotting predictions...")
+
+import math
+
+
+def plot_hidden_layer_activations(pred, layer_inx, imgs_per_row=None, filename=""):
+    if not imgs_per_row:
+        imgs_per_row = images_per_row
+    # Displays the feature maps
+    n_features = pred.shape[-1]  # Number of features in the feature map
+    size = pred.shape[0]  # The feature map has shape (1, size, size, n_features).
+    n_cols = math.ceil(n_features / imgs_per_row)  # Tiles the activation channels in this matrix
+    display_grid = np.zeros((size * n_cols, imgs_per_row * size))
+    for col in range(n_cols):  # Tiles each filter into a big horizontal grid
+        for row in range(imgs_per_row):
+            try:
+                channel_image = pred[:, :, col * imgs_per_row + row]
+            except IndexError:
+                break
+            # channel_image -= channel_image.mean()  # Post-processes the feature to make it visually palatable
+            # channel_image /= channel_image.std()
+            # channel_image *= 64
+            # channel_image += 128
+            # channel_image = np.clip(channel_image, 0, 255).astype('uint8')
+            display_grid[col * size: (col + 1) * size,  # Displays the grid
+            row * size: (row + 1) * size] = channel_image
+    scale = 1. / size
+    plt.figure(figsize=(scale * display_grid.shape[1],
+                        scale * display_grid.shape[0]))
+    plt.grid(False)
+    plt.title("Layer nr. " + str(layer_inx + 1))
+    plt.imshow(display_grid, aspect='auto', cmap='bone')
+    plt.savefig(os.path.join(data_dir, "plots", "Layer_" + str(layer_inx + 1) + "_" + filename + figure_suffix),
+                bbox_inches="tight")
+
+
+for to_predict in train_filepaths:
+    print("Plotting predictions/layers from", os.path.split(to_predict)[1], "...")
+    x, y = train_generator.load_filepath(to_predict)
+
+    pred_layers = prediction_model.predict(np.asarray([x]))
+    plt.grid(False)
+    plt.title("Input")
+    plt.imshow(x.squeeze().astype(np.float32), aspect='auto', cmap='bone')
+    plt.savefig(os.path.join(data_dir, "plots", "Input_" + os.path.split(to_predict)[1] + figure_suffix),
+                bbox_inches="tight")
+    plt.close('all')
+    for layer_inx in layers_to_vis:
+        print("\tOn layer nr.", layer_inx + 1)
+        pred = pred_layers[layer_inx][0]
+        plot_hidden_layer_activations(pred, layer_inx, filename=os.path.split(to_predict)[1])
         plt.close('all')
-        for layer_inx in layers_to_vis:
-            print("\tOn layer nr.", layer_inx+1)
-            pred = pred_layers[layer_inx][0]
-            plot_hidden_layer_activations(pred, layer_inx, filename=os.path.split(to_predict)[1])
-            plt.close('all')
-        
-        plt.subplot(2, 2, 1)
-        plt.imshow(pred_layers.squeeze().round(), vmin=0, vmax=1)
-        plt.subplot(2, 2, 2)
-        plt.imshow(x.squeeze().astype(np.float32), vmin=0, vmax=1)
-        plt.subplot(2, 2, 3)
-        plt.imshow(pred_layers.squeeze(), vmin=0, vmax=1)
-        plt.subplot(2, 2, 4)
-        plt.imshow(y.squeeze(), vmin=0, vmax=1)
-        plt.show()
+
+    plt.subplot(2, 2, 1)
+    plt.imshow(np.abs(x.squeeze().astype(np.float32)-pred_layers.squeeze()), vmin=0, vmax=1)
+    plt.subplot(2, 2, 2)
+    plt.imshow(x.squeeze().astype(np.float32), vmin=0, vmax=1)
+    plt.subplot(2, 2, 3)
+    plt.imshow(pred_layers.squeeze(), vmin=0, vmax=1)
+    plt.subplot(2, 2, 4)
+    plt.imshow(y.squeeze(), vmin=0, vmax=1)
+    plt.savefig(os.path.join(data_dir, "plots", "Summary_" + os.path.split(to_predict)[1] + figure_suffix),
+                bbox_inches="tight")
 
