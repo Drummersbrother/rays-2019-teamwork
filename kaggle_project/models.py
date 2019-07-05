@@ -411,7 +411,6 @@ def transition_layer(x, nb_channels, dropout_rate=None, compression=1.0, weight_
 
 
 def UXception(down_sampling=1, learning_rate=1e-4):
-
     print("Loading XCeption...")
     backbone = Xception(input_shape=(128, 128, 3),weights='imagenet',include_top=False)
     print("Done loading Xception!")
@@ -483,7 +482,10 @@ def UXception(down_sampling=1, learning_rate=1e-4):
     model = Model(input_layer, output_layer)
     #model.name = 'u-xception'
     from tensorflow.keras.optimizers import Adam
-    model.compile(optimizer=Adam(lr=learning_rate), loss=bce_logdice_loss,
+    # Was previously bce_logdice_loss as loss function
+    from lovasz_loss import keras_lovasz_softmax
+
+    model.compile(optimizer=Adam(lr=learning_rate), loss=keras_lovasz_softmax,
                   metrics=[metrics.binary_accuracy, dice_coef])
 
     return model
