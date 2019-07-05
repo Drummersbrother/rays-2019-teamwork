@@ -15,15 +15,15 @@ import tensorflow.keras.layers as klayer
 import albumentations as alb
 
 # from keras.layers import Input, Dense, Dropout, Activation, concatenate, BatchNormalization
-from keras.models import Model
+from tensorflow.keras.models import Model
 # from keras.layers import Conv2D, GlobalAveragePooling2D, AveragePooling2D, MaxPooling2D, UpSampling2D
-from keras.regularizers import l2
+from tensorflow.keras.regularizers import l2
 
 from keras_contrib.losses.jaccard import jaccard_distance as jaccard
-from keras import metrics
+from tensorflow.keras import metrics
 
-from keras.callbacks import Callback
-import keras.backend as K
+from tensorflow.keras.callbacks import Callback
+import tensorflow.keras.backend as K
 
 from tensorboard.plugins.beholder import Beholder
 
@@ -53,10 +53,10 @@ def load_filep(f, down_sampling=8, mask_dir=""):
 def augment_sample(X, Y):
     original_height, original_width = X.shape[:2]
     aug = alb.Compose([
-        alb.OneOf([alb.RandomSizedCrop(min_max_height=(50, 101), height=original_height, width=original_width, p=0.5),
+        alb.OneOf([alb.RandomSizedCrop(min_max_height=(100, 127), height=original_height, width=original_width, p=0.3),
               alb.PadIfNeeded(min_height=original_height, min_width=original_width, p=0.5)], p=1),    
         alb.HorizontalFlip(p=0.5),
-        alb.OneOf([alb.GridDistortion(p=0.5)],p=0.8)])
+        alb.OneOf([alb.GridDistortion(p=0.5)],p=0.2)])
 
     augmented = aug(image=X, mask=Y)
 
@@ -64,7 +64,7 @@ def augment_sample(X, Y):
     Y = augmented['mask']
     return X, Y
 
-def siim_data_gen(filepaths, batch_size, dim=(1024, 1024), shuffle=True, mask_dir=""):
+def siim_data_gen(filepaths, batch_size, dim=(1024, 1024), shuffle=True, mask_dir="", augment_data=True):
     """An infinite generator that gives X, Y of shape (batch_size, *dims, 1) (float32), from the given valid
     filepaths."""
     from random import shuffle as rshuffle
@@ -80,10 +80,11 @@ def siim_data_gen(filepaths, batch_size, dim=(1024, 1024), shuffle=True, mask_di
             for filepath in filepaths[i:i+batch_size]:
                 X, Y = load_filep(filepath, down_sampling, mask_dir)
 
-                X, Y = augment_sample(X[:, :, 0], Y[:, :, 0])
-                X = np.expand_dims(X, axis=2)
-                X = np.repeat(X, 3, axis=2)
-                Y = np.expand_dims(Y, axis=2)
+                if augment_data:
+                    X, Y = augment_sample(X[:, :, 0], Y[:, :, 0])
+                    X = np.expand_dims(X, axis=2)
+                    X = np.repeat(X, 3, axis=2)
+                    Y = np.expand_dims(Y, axis=2)
 
                 xs.append(X)
                 ys.append(Y)
@@ -357,7 +358,7 @@ dims = (128, 128)
 n_epochs = 2000
 batch_size = 16
 img_downsampling = 8
-learning_rate = 1e-4
+learning_rate = 1e-5
 num_train_examples = len(valid_train_filepaths)
 use_validation = True
 validation_coeff = 0.1
@@ -489,8 +490,8 @@ except Exception as e:
         #keras.callbacks.TensorBoard(log_dir=config["logdir"], histogram_freq=1, write_grads=True,
         #                            write_graph=True, write_images=True),
         #BeholderCallback(log_dir=config["logdir"]),
-        keras.callbacks.EarlyStopping(monitor="loss", patience=10, restore_best_weights=True)#,
-        #keras.callbacks.ReduceLROnPlateau(monitor="loss", factor=0.2, patience=3)
+        keras.callbacks.EarlyStopping(monitor="val_loss", patience=50, restore_best_weights=True),
+        keras.callbacks.ReduceLROnPlateau(monitor="val_loss", factor=0.2, patience=4)
     ]
     if monitor_weights:
         callbacks.append(monitor_weights_callback)
@@ -499,7 +500,7 @@ except Exception as e:
     
     data_gen = siim_data_gen(train_filepaths, batch_size, dim=(128, 128), mask_dir=os.path.join(data_dir, "train_png", "masks"))
     if use_validation:
-        validation_gen = siim_data_gen(validation_filepaths, batch_size, dim=(128, 128), mask_dir=os.path.join(data_dir, "train_png", "masks"))
+        validation_gen = siim_data_gen(validation_filepaths, batch_size, dim=(128, 128), mask_dir=os.path.join(data_dir, "train_png", "masks"), augment_data=False)
 
     try:
         please_stop = False

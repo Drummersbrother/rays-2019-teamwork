@@ -9,46 +9,53 @@ from matplotlib import pyplot as plt
 import os
 from glob import glob
 
-import keras.layers as klayer
-from keras.applications.xception import Xception
+import tensorflow.keras.layers as klayer
+from tensorflow.keras.applications.xception import Xception
 
 # from keras.layers import Input, Dense, Dropout, Activation, concatenate, BatchNormalization
-from keras.models import Model
+from tensorflow.keras.models import Model
 # from keras.layers import Conv2D, GlobalAveragePooling2D, AveragePooling2D, MaxPooling2D, UpSampling2D
-from keras.regularizers import l2
+from tensorflow.keras.regularizers import l2
 
 from keras_contrib.losses.jaccard import jaccard_distance as jaccard
-from keras import metrics
+from tensorflow.keras import metrics
 
-from keras.callbacks import Callback
-import keras.backend as K
+from tensorflow.keras.callbacks import Callback
+import tensorflow.keras.backend as K
 
 """Define losses and metrics"""
 
 
-def dice_coef(y_true, y_pred):
+def dice_coef(y_true, y_pred, smooth=0.1):
     y_true_f = K.flatten(y_true)
     y_pred = K.cast(y_pred, 'float32')
     y_pred_f = K.cast(K.greater(K.flatten(y_pred), 0.5), 'float32')
     intersection = y_true_f * y_pred_f
-    score = 2. * K.sum(intersection) / (K.sum(y_true_f) + K.sum(y_pred_f))
+    score = (2. * K.sum(intersection)) / ((K.sum(y_true_f) + K.sum(y_pred_f) + smooth))
     return score
 
 
-def dice_loss(y_true, y_pred):
-    smooth = 1.
+def dice_loss(y_true, y_pred, smooth=1.):
     y_true_f = K.flatten(y_true)
     y_pred_f = K.flatten(y_pred)
     intersection = y_true_f * y_pred_f
     score = (2. * K.sum(intersection) + smooth) / (K.sum(y_true_f) + K.sum(y_pred_f) + smooth)
     return 1. - score
 
+def pixel_adjusted_dice_loss(y_true, y_pred, smooth=1., k=3.):
+    true_sum = K.sum(y_true) + smooth/100
+    num_pixels = 128**2
+    return dice_loss(y_true, y_pred, smooth) * (true_sum/num_pixels)**0.5
 
 def bce_dice_loss(y_true, y_pred):
     return keras.backend.binary_crossentropy(y_true, y_pred) + dice_loss(y_true, y_pred)
 
 
-def bce_logdice_loss(y_true, y_pred):
+def bce_logdice_loss(y_true, y_pred, smooth=1., k=3.):
+    return keras.backend.binary_crossentropy(y_true, y_pred) - K.log(1. - dice_loss(y_true, y_pred, smooth))
+
+
+def pixel_adjusted_bce_logdice(y_true, y_pred, smooth=1., k=3.):
     return keras.backend.binary_crossentropy(y_true, y_pred) - K.log(1. - dice_loss(y_true, y_pred))
 
 
@@ -475,8 +482,8 @@ def UXception(down_sampling=1, learning_rate=1e-4):
     
     model = Model(input_layer, output_layer)
     #model.name = 'u-xception'
-
-    model.compile(optimizer=keras.optimizers.Adam(lr=learning_rate), loss=bce_logdice_loss,
-                  metrics=[metrics.binary_accuracy, dice_coef])
+    from tensorflow.keras.optimizers import Adam
+    model.compile(optimizer=Adam(lr=learning_rate), loss=bce_logdice_loss,
+                  metrics=[metrics.binary_accuracy, dice_loss])
 
     return model
