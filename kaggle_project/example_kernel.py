@@ -8,6 +8,7 @@ from tensorflow import keras
 from matplotlib import pyplot as plt
 
 import os
+import pickle
 import traceback
 from glob import glob
 
@@ -56,7 +57,8 @@ def augment_sample(X, Y):
         alb.OneOf([alb.RandomSizedCrop(min_max_height=(100, 127), height=original_height, width=original_width, p=0.3),
               alb.PadIfNeeded(min_height=original_height, min_width=original_width, p=0.5)], p=1),    
         alb.HorizontalFlip(p=0.5),
-        alb.OneOf([alb.GridDistortion(p=0.5)],p=0.2)])
+        #alb.OneOf([alb.GridDistortion(p=0.5)],p=0.2)
+        ])
 
     augmented = aug(image=X, mask=Y)
 
@@ -351,24 +353,6 @@ except FileNotFoundError:
     with open(mask_csv_filename, mode="r") as f:
         raw_rle = f.read()
 
-"""Setup network training params"""
-
-# Network and training params/config
-dims = (128, 128)
-n_epochs = 2000
-batch_size = 16
-img_downsampling = 8
-learning_rate = 1e-5
-num_train_examples = len(valid_train_filepaths)
-use_validation = True
-validation_coeff = 0.1
-retrain = True
-net_arch = "UXception"
-monitor_weights = False
-
-# The file in which trained weights are going to be stored
-net_filename = f"{net_arch}-epochs_{n_epochs}-batchsz_{batch_size}-lr_{learning_rate}-downsampling_{img_downsampling}-numexamples_{num_train_examples}"
-
 with open(mask_csv_filename, mode="r") as f:
         raw_rle = f.read()
 raw_csv_data = raw_rle.split("\n")
@@ -381,6 +365,24 @@ pneumo_filepaths = []
 for path in valid_train_filepaths:
     if haspneumo_lookup[os.path.split(path)[1][:-4]]:
         pneumo_filepaths.append(path)
+
+"""Setup network training params"""
+
+# Network and training params/config
+dims = (128, 128)
+n_epochs = 2000
+batch_size = 16
+img_downsampling = 8
+learning_rate = 1e-4
+num_train_examples = 2001
+use_validation = True
+validation_coeff = 0.1
+retrain = False
+net_arch = "UXception"
+monitor_weights = False
+
+# The file in which trained weights are going to be stored
+net_filename = f"{net_arch}-epochs_{n_epochs}-batchsz_{batch_size}-lr_{learning_rate}-downsampling_{img_downsampling}-numexamples_{num_train_examples}"
 
 use_filepaths = pneumo_filepaths
 num_validation_examples = int(num_train_examples * validation_coeff)
@@ -432,43 +434,22 @@ except FileNotFoundError:
 
 print("Setup done!")
 
-"""Filter filepaths to ones that we actually want to train against"""
-with open(mask_csv_filename, mode="r") as f:
-    raw_rle = f.read()
-raw_csv_data = raw_rle.split("\n")
-haspneumo_lookup = {}
-for line in raw_csv_data:
-    key, rle = line.split(",")
-    haspneumo_lookup[key] = False if rle.strip() == "-1" else True
-
-pneumo_filepaths = []
-for path in valid_train_filepaths:
-    if haspneumo_lookup[os.path.split(path)[1][:-4]]:
-        pneumo_filepaths.append(path)
-
-
-use_filepaths = valid_train_filepaths
-num_validation_examples = int(num_train_examples * validation_coeff)
-train_filepaths = use_filepaths[:-int(validation_coeff * len(use_filepaths)) if use_validation else len(use_filepaths)][
-                  :num_train_examples]
-validation_filepaths = use_filepaths[-int(validation_coeff * len(use_filepaths)):][:num_validation_examples]
-
 """Train the network"""
 keras.backend.clear_session()
 
 # This is some weird debugging code, weird CUDA errors might appear if this code is deleted
-tf.debugging.set_log_device_placement(True)
-gpus = tf.config.experimental.list_physical_devices('GPU')
-if gpus:
-  try:
-    # Currently, memory growth needs to be the same across GPUs
-    for gpu in gpus:
-      tf.config.experimental.set_memory_growth(gpu, True)
-    logical_gpus = tf.config.experimental.list_logical_devices('GPU')
-    print(len(gpus), "Physical GPUs,", len(logical_gpus), "Logical GPUs")
-  except RuntimeError as e:
-    # Memory growth must be set before GPUs have been initialized
-    print(e)
+#tf.debugging.set_log_device_placement(True)
+#gpus = tf.config.experimental.list_physical_devices('GPU')
+#if gpus:
+#  try:
+#    # Currently, memory growth needs to be the same across GPUs
+#    for gpu in gpus:
+#      tf.config.experimental.set_memory_growth(gpu, True)
+#    logical_gpus = tf.config.experimental.list_logical_devices('GPU')
+#    print(len(gpus), "Physical GPUs,", len(logical_gpus), "Logical GPUs")
+#  except RuntimeError as e:
+#    # Memory growth must be set before GPUs have been initialized
+#    print(e)
 
 print("Loading model", net_arch, "...")
 model = locals()[net_arch](down_sampling=img_downsampling, learning_rate=learning_rate)
@@ -487,18 +468,19 @@ except Exception as e:
     print("Training network!")
 
     callbacks = [
-        #keras.callbacks.TensorBoard(log_dir=config["logdir"], histogram_freq=1, write_grads=True,
+        #keras.callbacks.TensorBoard(log_dir=config["logdir"], histogram_freq=1, write_grads=True),
         #                            write_graph=True, write_images=True),
         #BeholderCallback(log_dir=config["logdir"]),
-        keras.callbacks.EarlyStopping(monitor="val_loss", patience=50, restore_best_weights=True),
-        keras.callbacks.ReduceLROnPlateau(monitor="val_loss", factor=0.2, patience=4)
+        keras.callbacks.EarlyStopping(monitor="dice_coef", patience=50, restore_best_weights=True, mode="max"),
+        keras.callbacks.ReduceLROnPlateau(monitor="loss", factor=0.2, patience=4, mode="min"),
+        keras.callbacks.CSVLogger(os.path.join(data_dir, "histories", net_filename) + ".csv", append=True)
     ]
     if monitor_weights:
         callbacks.append(monitor_weights_callback)
 
     print("Fitting")
     
-    data_gen = siim_data_gen(train_filepaths, batch_size, dim=(128, 128), mask_dir=os.path.join(data_dir, "train_png", "masks"))
+    data_gen = siim_data_gen(train_filepaths, batch_size, dim=(128, 128), mask_dir=os.path.join(data_dir, "train_png", "masks"), augment_data=False)
     if use_validation:
         validation_gen = siim_data_gen(validation_filepaths, batch_size, dim=(128, 128), mask_dir=os.path.join(data_dir, "train_png", "masks"), augment_data=False)
 
