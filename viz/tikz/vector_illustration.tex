@@ -1,0 +1,31 @@
+\begin{tikzpicture}
+
+%\draw (0,0) rectangle (4,4);
+
+%\draw (0,0) parabola (4,4);
+
+%\draw (0,0) .. controls (0,4) and (4,0) .. (4,4);
+
+%\draw[red,thick,dashed] (2,2) circle (3cm);
+
+%\draw (2,2) ellipse (3cm and 1cm);
+
+%\draw (3,0) arc (0:75:3cm);
+
+\draw[step=1cm,lightgray,very thin] (-1.9,-1.9) grid (7.9,3.9);
+
+%\shadedraw[inner color=blue,outer color=red, draw=black] (0,0) rectangle (4,4);
+
+\draw[thick,->] (0,0) -- (7.5,0) node[anchor=north west] {};
+\draw[thick,->] (0,0) -- (0,3.5) node[anchor=south east] {};
+
+\draw[-{Latex[length=5mm, width=2mm]}] (0,0)--(5,-1) node[right]{$\vect{5, -1}$};
+\draw[-{Latex[length=5mm, width=2mm]}] (0,0)--(2,3) node[right]{$\vect{2, 3}$};
+\draw[-{Latex[length=5mm, width=2mm]}] (0,0)--(7,2) node[right]{$\vect{2, 3} + \vect{5, -1}$};
+
+\foreach \x in {0,1,2,3,4,5,6,7}
+\draw (\x cm,1pt) -- (\x cm,-1pt) node[anchor=north] {$\x$};
+\foreach \y in {0,1,2,3}
+\draw (1pt,\y cm) -- (-1pt,\y cm) node[anchor=east] {$\y$};
+
+\end{tikzpicture}
