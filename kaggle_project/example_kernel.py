@@ -374,7 +374,7 @@ n_epochs = 2000
 batch_size = 16
 img_downsampling = 8
 learning_rate = 1e-4
-num_train_examples = 2001
+num_train_examples = 1999
 use_validation = True
 validation_coeff = 0.1
 retrain = False
@@ -606,8 +606,8 @@ def old_plot_code():
     print("dummy")
 
 # Plot settings
-plot_filepaths = validation_filepaths
-max_images = 16
+plot_filepaths = train_filepaths
+max_images = 32
 grid_width = 4
 threshold_best = 0.5
 
@@ -641,6 +641,6 @@ for idx, i in enumerate(all_fps_to_plot):
     superimposed = network_input + ground_truth_mask + pred_mask
     ax.imshow(superimposed)
     ax.axis('off')
-
-plt.title("Mean dice coeff:" + str(round(100*(sum(dices)/len(dices)), 2)))
+print("Mean dice coeff:" + str(round(100*(sum(dices)/len(dices)), 2)))
+#plt.title("Mean dice coeff:" + str(round(100*(sum(dices)/len(dices)), 2)))
 plt.show()
