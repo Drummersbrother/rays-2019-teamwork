@@ -54,7 +54,7 @@ def load_filep(f, down_sampling=8, mask_dir=""):
 def augment_sample(X, Y):
     original_height, original_width = X.shape[:2]
     aug = alb.Compose([
-        alb.OneOf([alb.RandomSizedCrop(min_max_height=(100, 127), height=original_height, width=original_width, p=0.3),
+        alb.OneOf([alb.RandomSizedCrop(min_max_height=(110, 127), height=original_height, width=original_width, p=0.3),
               alb.PadIfNeeded(min_height=original_height, min_width=original_width, p=0.5)], p=1),    
         alb.HorizontalFlip(p=0.5),
         #alb.OneOf([alb.GridDistortion(p=0.5)],p=0.2)
@@ -374,15 +374,16 @@ n_epochs = 2000
 batch_size = 16
 img_downsampling = 8
 learning_rate = 1e-4
-num_train_examples = 1999
+num_train_examples = 2000
 use_validation = True
 validation_coeff = 0.1
-retrain = False
+retrain = True
+cont_train = True
 net_arch = "UXception"
 monitor_weights = False
 
 # The file in which trained weights are going to be stored
-net_filename = f"{net_arch}-epochs_{n_epochs}-batchsz_{batch_size}-lr_{learning_rate}-downsampling_{img_downsampling}-numexamples_{num_train_examples}"
+net_filename = f"data_aug_no_swa_{net_arch}-epochs_{n_epochs}-batchsz_{batch_size}-lr_{learning_rate}-downsampling_{img_downsampling}-numexamples_{num_train_examples}-valco_{validation_coeff}"
 
 use_filepaths = pneumo_filepaths
 num_validation_examples = int(num_train_examples * validation_coeff)
@@ -463,24 +464,29 @@ try:
         raise Exception
     print("Loading pretrained network weights, from", os.path.join(data_dir + "models", net_filename))
     model.load_weights(os.path.join(data_dir + "models", net_filename))
+    if cont_train:
+        print("Continuing the training of the already saved model...")
+        raise Exception
 except Exception as e:
     print("Was not able to load model...")
     print("Training network!")
 
+    from SWA import SWA
     callbacks = [
         #keras.callbacks.TensorBoard(log_dir=config["logdir"], histogram_freq=1, write_grads=True),
         #                            write_graph=True, write_images=True),
         #BeholderCallback(log_dir=config["logdir"]),
-        keras.callbacks.EarlyStopping(monitor="dice_coef", patience=50, restore_best_weights=True, mode="max"),
-        keras.callbacks.ReduceLROnPlateau(monitor="loss", factor=0.2, patience=4, mode="min"),
-        keras.callbacks.CSVLogger(os.path.join(data_dir, "histories", net_filename) + ".csv", append=True)
+        keras.callbacks.EarlyStopping(monitor="loss", patience=50, restore_best_weights=True, mode="min"),
+        keras.callbacks.ReduceLROnPlateau(monitor="loss", factor=0.2, patience=15, mode="min"),
+        keras.callbacks.CSVLogger(os.path.join(data_dir, "histories", net_filename) + ".csv", append=True),
+        #SWA(os.path.join(data_dir, "models", net_filename + "after_swa"), 80)
     ]
     if monitor_weights:
         callbacks.append(monitor_weights_callback)
 
     print("Fitting")
     
-    data_gen = siim_data_gen(train_filepaths, batch_size, dim=(128, 128), mask_dir=os.path.join(data_dir, "train_png", "masks"), augment_data=False)
+    data_gen = siim_data_gen(train_filepaths, batch_size, dim=(128, 128), mask_dir=os.path.join(data_dir, "train_png", "masks"), augment_data=True)
     if use_validation:
         validation_gen = siim_data_gen(validation_filepaths, batch_size, dim=(128, 128), mask_dir=os.path.join(data_dir, "train_png", "masks"), augment_data=False)
 
@@ -619,7 +625,11 @@ samples_to_plot = [load_filep(f, down_sampling=8, mask_dir=os.path.join(data_dir
 xs, ys = [e[0] for e in samples_to_plot], [e[1] for e in samples_to_plot]
 xs, ys = np.array(xs), np.array(ys)
 preds_to_plot = prediction_model.predict(xs)
+
+dice_intersections = []
+dice_sums = []
 dices = []
+
 for idx, i in enumerate(all_fps_to_plot):
     print("Sub-plotting prediction from", os.path.split(i)[1], "...")
     x, y = load_filep(i, down_sampling=8, mask_dir=os.path.join(data_dir, "train_png", "masks"))
@@ -627,6 +637,10 @@ for idx, i in enumerate(all_fps_to_plot):
     x /= 2
     pred = preds_to_plot[idx]
 
+    dice_intersection = y * pred.squeeze() * 2
+    dice_sum = y.sum() + pred.squeeze().sum()
+    dice_intersections.append(dice_intersection)
+    dice_sums.append(dice_sum)
     pred_dice_coeff = K.get_session().run(dice_coef(y, pred.squeeze()))
     dices.append(pred_dice_coeff)
 
@@ -641,6 +655,7 @@ for idx, i in enumerate(all_fps_to_plot):
     superimposed = network_input + ground_truth_mask + pred_mask
     ax.imshow(superimposed)
     ax.axis('off')
+print("Total dice coeff:" + str(sum(dice_intersections)/(sum(dice_sums)+0.01)))
 print("Mean dice coeff:" + str(round(100*(sum(dices)/len(dices)), 2)))
 #plt.title("Mean dice coeff:" + str(round(100*(sum(dices)/len(dices)), 2)))
 plt.show()
